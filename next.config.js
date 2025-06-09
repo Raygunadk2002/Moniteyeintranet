@@ -3,8 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   experimental: {
-    // Use strict CSS chunking for better performance
-    cssChunking: 'strict',
+    // Remove cssChunking as it's causing issues
   },
   // Optimize for Vercel deployment
   output: 'standalone',

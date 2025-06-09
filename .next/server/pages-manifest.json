@@ -1,1 +1,11 @@
-{"/_error":"pages/_error.js","/_app":"pages/_app.js","/about":"pages/about.html","/admin":"pages/admin.html","/api/dashboard-metrics":"pages/api/dashboard-metrics.js","/api/pipedrive":"pages/api/pipedrive.js","/api/employee-holidays":"pages/api/employee-holidays.js","/api/revenue-data":"pages/api/revenue-data.js","/api/execute-schema":"pages/api/execute-schema.js","/api/setup-database-direct":"pages/api/setup-database-direct.js","/api/run-schema":"pages/api/run-schema.js","/api/setup-database":"pages/api/setup-database.js","/api/task-columns":"pages/api/task-columns.js","/api/setup-tasks-database":"pages/api/setup-tasks-database.js","/api/test-database":"pages/api/test-database.js","/api/tasks":"pages/api/tasks.js","/api/team-holidays-metrics":"pages/api/team-holidays-metrics.js","/api/timetastic":"pages/api/timetastic.js","/api/test-supabase-connection":"pages/api/test-supabase-connection.js","/api/test-supabase":"pages/api/test-supabase.js","/":"pages/index.html","/calendar":"pages/calendar.html","/test":"pages/test.html","/tasks":"pages/tasks.html","/api/upload-revenue":"pages/api/upload-revenue.js","/api/debug-upload":"pages/api/debug-upload.js","/_document":"pages/_document.js","/404":"pages/404.html"}
+{
+  "/_app": "pages/_app.js",
+  "/_error": "pages/_error.js",
+  "/_document": "pages/_document.js",
+  "/": "pages/index.js",
+  "/api/dashboard-metrics": "pages/api/dashboard-metrics.js",
+  "/api/pipedrive": "pages/api/pipedrive.js",
+  "/api/tasks": "pages/api/tasks.js",
+  "/api/revenue-data": "pages/api/revenue-data.js",
+  "/api/team-holidays-metrics": "pages/api/team-holidays-metrics.js"
+}
