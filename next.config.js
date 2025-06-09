@@ -2,12 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  experimental: {
-    // Remove cssChunking as it's causing issues
-  },
+  // Remove experimental options that cause issues
+  experimental: {},
   // Optimize for Vercel deployment
   output: 'standalone',
-  // Handle potential build issues
+  // Handle potential build issues during deployment
   eslint: {
     ignoreDuringBuilds: true,
   },
