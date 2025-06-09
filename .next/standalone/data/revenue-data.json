@@ -1,0 +1,81 @@
+{
+  "monthlyRevenue": [
+    {
+      "month": "June 2024",
+      "revenue": 51820.8,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "July 2024",
+      "revenue": 53623,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "August 2024",
+      "revenue": 56546,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "September 2024",
+      "revenue": 55571.8,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "October 2024",
+      "revenue": 69263.8,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "November 2024",
+      "revenue": 89365,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "December 2024",
+      "revenue": 64432.8,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "January 2025",
+      "revenue": 70848,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "February 2025",
+      "revenue": 71349.72,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "March 2025",
+      "revenue": 75821.48,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "April 2025",
+      "revenue": 109242,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    },
+    {
+      "month": "May 2025",
+      "revenue": 100598.4,
+      "timestamp": "2025-06-09T12:54:40.563Z"
+    }
+  ],
+  "lastUpdated": "2025-06-09T12:54:40.690Z",
+  "totalRevenue": 868482.7999999999,
+  "revenueChange": "-7.9%",
+  "revenueData": [
+    52,
+    54,
+    57,
+    56,
+    69,
+    89,
+    64,
+    71,
+    71,
+    76,
+    109,
+    101
+  ]
+}
