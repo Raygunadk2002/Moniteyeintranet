@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "clean": "rm -rf .next && rm -rf node_modules/.cache",
+    "build:clean": "npm run clean && npm run build",
     "start": "next start",
     "lint": "next lint"
   },

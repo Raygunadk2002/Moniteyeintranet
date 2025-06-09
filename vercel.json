@@ -1,25 +1,12 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next",
-      "config": {
-        "outputDirectory": ".next"
-      }
-    }
-  ],
+  "buildCommand": "npm run build:clean",
   "functions": {
     "pages/api/**/*.ts": {
       "maxDuration": 30
     }
   },
   "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@next_public_supabase_url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@next_public_supabase_anon_key",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key",
-    "PIPEDRIVE_API_TOKEN": "@pipedrive_api_token",
-    "TIMETASTIC_ACCESS_TOKEN": "@timetastic_access_token"
-  },
-  "buildCommand": "npm run build"
+    "NODE_ENV": "production"
+  }
 } 
