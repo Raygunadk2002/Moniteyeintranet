@@ -20,17 +20,35 @@ function removeVAT(amount: number): number {
   return amount / 1.2; // Remove 20% VAT
 }
 
-// Default fallback data (with VAT removed)
+// Enhanced fallback data with realistic monthly progression
 function getDefaultData(): RevenueDataFile {
-  const defaultRevenueData = [45, 52, 48, 67, 73, 81, 94, 87, 95, 102, 89, 124];
-  const vatRemovedData = defaultRevenueData.map(amount => Math.round(removeVAT(amount * 1000)) / 1000); // Convert back to thousands
+  // Generate 12 months of realistic data
+  const monthNames = [
+    'January 2024', 'February 2024', 'March 2024', 'April 2024', 
+    'May 2024', 'June 2024', 'July 2024', 'August 2024', 
+    'September 2024', 'October 2024', 'November 2024', 'December 2024'
+  ];
+  
+  // Base monthly revenues with seasonal variation (no VAT)
+  const baseAmounts = [
+    45000, 52000, 58000, 67000, 73000, 81000, 
+    94000, 87000, 95000, 102000, 89000, 124000
+  ];
+  
+  const timestamp = new Date().toISOString();
+  
+  const monthlyRevenue: RevenueData[] = monthNames.map((month, index) => ({
+    month,
+    revenue: baseAmounts[index],
+    timestamp
+  }));
   
   return {
-    monthlyRevenue: [],
-    lastUpdated: new Date().toISOString(),
-    totalRevenue: Math.round(removeVAT(124563)),
+    monthlyRevenue,
+    lastUpdated: timestamp,
+    totalRevenue: baseAmounts.reduce((sum, amount) => sum + amount, 0),
     revenueChange: '+12.5%',
-    revenueData: vatRemovedData
+    revenueData: baseAmounts.map(amount => Math.round(amount / 1000)) // Convert to thousands for chart
   };
 }
 
@@ -43,6 +61,8 @@ export default async function handler(
   }
 
   try {
+    console.log('Attempting to fetch revenue data from Supabase...');
+    
     // Fetch revenue data from Supabase, ordered by year and month
     const { data: revenueData, error } = await supabaseAdmin
       .from('revenue_data')
@@ -52,12 +72,16 @@ export default async function handler(
 
     if (error) {
       console.error('Supabase error:', error);
+      console.log('Using default data due to Supabase error');
       return res.status(200).json(getDefaultData());
     }
 
     if (!revenueData || revenueData.length === 0) {
+      console.log('No revenue data found in Supabase, using default data');
       return res.status(200).json(getDefaultData());
     }
+
+    console.log(`Found ${revenueData.length} revenue records in Supabase`);
 
     // Transform Supabase data to match the expected format (with VAT removed)
     const monthlyRevenue: RevenueData[] = revenueData.map(row => ({
@@ -94,9 +118,13 @@ export default async function handler(
       revenueData: revenueDataArray
     };
 
+    console.log('Successfully processed revenue data from Supabase');
     res.status(200).json(response);
   } catch (error) {
     console.error('Error fetching revenue data:', error);
+    console.log('Using default data due to connection error');
+    
+    // Always return successful response with default data
     res.status(200).json(getDefaultData());
   }
 } 

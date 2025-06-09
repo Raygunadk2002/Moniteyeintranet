@@ -22,6 +22,8 @@ export default async function handler(
     const currentYear = new Date().getFullYear();
     const nextYear = currentYear + 1;
     
+    console.log(`Fetching holidays for ${currentYear} and ${nextYear}`);
+    
     // Fetch employee holidays for current and next year
     const [currentYearResponse, nextYearResponse] = await Promise.all([
       fetch(`https://app.timetastic.co.uk/api/holidays?year=${currentYear}`, {
@@ -44,17 +46,25 @@ export default async function handler(
     if (currentYearResponse.ok) {
       const currentYearData = await currentYearResponse.json();
       if (currentYearData.holidays && Array.isArray(currentYearData.holidays)) {
+        console.log(`Found ${currentYearData.holidays.length} holidays for ${currentYear}`);
         allHolidays.push(...currentYearData.holidays);
       }
+    } else {
+      console.log(`Failed to fetch ${currentYear} holidays:`, currentYearResponse.status);
     }
 
     // Process next year holidays
     if (nextYearResponse.ok) {
       const nextYearData = await nextYearResponse.json();
       if (nextYearData.holidays && Array.isArray(nextYearData.holidays)) {
+        console.log(`Found ${nextYearData.holidays.length} holidays for ${nextYear}`);
         allHolidays.push(...nextYearData.holidays);
       }
+    } else {
+      console.log(`Failed to fetch ${nextYear} holidays:`, nextYearResponse.status);
     }
+
+    console.log(`Total holidays before deduplication: ${allHolidays.length}`);
 
     // Calculate date ranges
     const today = new Date();
@@ -66,15 +76,21 @@ export default async function handler(
     const thirtyDaysFromNow = new Date(today);
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-    // Deduplicate holidays based on unique combination of employee, start date, and end date
+    // Advanced deduplication - create unique keys for each holiday
     const uniqueHolidays = allHolidays.filter((holiday, index, self) => {
-      return index === self.findIndex((h) => 
-        h.userId === holiday.userId && 
-        h.startDate === holiday.startDate && 
-        h.endDate === holiday.endDate &&
-        h.status === holiday.status
-      );
+      // Create a unique key combining multiple fields
+      const key = `${holiday.userId}_${holiday.startDate}_${holiday.endDate}_${holiday.status}_${holiday.leaveType || 'Holiday'}`;
+      
+      // Find the first occurrence of this unique key
+      const firstIndex = self.findIndex((h) => {
+        const hKey = `${h.userId}_${h.startDate}_${h.endDate}_${h.status}_${h.leaveType || 'Holiday'}`;
+        return hKey === key;
+      });
+      
+      return index === firstIndex;
     });
+
+    console.log(`Total holidays after deduplication: ${uniqueHolidays.length}`);
 
     let next14Days = 0;
     let next30Days = 0;
@@ -88,29 +104,39 @@ export default async function handler(
         return;
       }
 
-      const startDate = new Date(holiday.startDate);
-      const endDate = new Date(holiday.endDate);
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(23, 59, 59, 999);
+      try {
+        const startDate = new Date(holiday.startDate);
+        const endDate = new Date(holiday.endDate);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
 
-      // Currently on holiday (today falls within the holiday period)
-      if (startDate <= today && endDate >= today) {
-        currentlyOnHoliday++;
-      }
+        // Validate dates are reasonable
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          console.log(`Invalid date for holiday:`, holiday);
+          return;
+        }
 
-      // Holiday starts in the next 14 days
-      if (startDate >= today && startDate <= fourteenDaysFromNow) {
-        next14Days++;
-      }
+        // Currently on holiday (today falls within the holiday period)
+        if (startDate <= today && endDate >= today) {
+          currentlyOnHoliday++;
+        }
 
-      // Holiday starts in the next 30 days
-      if (startDate >= today && startDate <= thirtyDaysFromNow) {
-        next30Days++;
-      }
+        // Holiday starts in the next 14 days
+        if (startDate >= today && startDate <= fourteenDaysFromNow) {
+          next14Days++;
+        }
 
-      // Any future holiday
-      if (startDate >= today) {
-        totalUpcoming++;
+        // Holiday starts in the next 30 days
+        if (startDate >= today && startDate <= thirtyDaysFromNow) {
+          next30Days++;
+        }
+
+        // Any future holiday
+        if (startDate >= today) {
+          totalUpcoming++;
+        }
+      } catch (error) {
+        console.log(`Error processing holiday:`, holiday, error);
       }
     });
 
@@ -120,6 +146,8 @@ export default async function handler(
       currentlyOnHoliday,
       totalUpcoming
     };
+
+    console.log('Team holiday metrics:', metrics);
 
     res.status(200).json(metrics);
 
@@ -134,6 +162,7 @@ export default async function handler(
       totalUpcoming: 8
     };
     
+    console.log('Using fallback metrics:', fallbackMetrics);
     res.status(200).json(fallbackMetrics);
   }
 } 

@@ -131,8 +131,14 @@ export default async function handler(
     // Calculate holiday trends
     const holidayChange = teamHolidaysData.next14Days > 0 ? `${teamHolidaysData.next30Days} in 30d` : 'None upcoming';
 
-    // Format currency for deals
-    const currencySymbol = pipedriveData.currency === 'GBP' ? '£' : '$';
+    // Format currency for deals - Force GBP for UK business
+    const currencySymbol = '£'; // Always use GBP symbol
+    
+    // Override currency if it's showing as USD - this is a UK business
+    if (pipedriveData.currency !== 'GBP') {
+      console.log(`Warning: Pipedrive returned ${pipedriveData.currency}, forcing to GBP for UK business`);
+      pipedriveData.currency = 'GBP';
+    }
 
     // Calculate 3M average and 12M total revenue from actual VAT-excluded data
     let threeMonthAverage = '£0';

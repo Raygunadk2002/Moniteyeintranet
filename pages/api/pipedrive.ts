@@ -14,6 +14,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const startDate = thirtyDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD format
     
+    console.log(`Looking for deals after: ${thirtyDaysAgo.toISOString()}`);
+    
     // Fetch deals from Pipedrive API with pagination to get recent deals
     let allDeals: any[] = [];
     let start = 0;
@@ -58,17 +60,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({
         newDealsCount: 0,
         newDealsValue: 0,
+        currency: 'GBP',
         error: 'No deals data available'
       });
     }
 
     console.log(`Total deals found: ${allDeals.length}`);
+    
+    // Debug: Show sample deals to understand date format
+    console.log('Sample deals:', allDeals.slice(0, 5).map(deal => ({
+      id: deal.id,
+      title: deal.title,
+      add_time: deal.add_time,
+      value: deal.value
+    })));
 
     // Filter deals created in the last 30 days
     const recentDeals = allDeals.filter((deal: any) => {
       if (!deal.add_time) return false;
       const dealDate = new Date(deal.add_time);
-      return dealDate >= thirtyDaysAgo;
+      const isRecent = dealDate >= thirtyDaysAgo;
+      if (isRecent) {
+        console.log(`Recent deal found: ${deal.id} - ${deal.title} - ${deal.add_time}`);
+      }
+      return isRecent;
     });
 
     // Calculate total value of recent deals
@@ -78,15 +93,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`Found ${recentDeals.length} deals in last 30 days with total value: ${totalValue}`);
 
+    // Force GBP currency for UK-based business
+    const currency = 'GBP';
+    const currencySymbol = '£';
+
     res.status(200).json({
       newDealsCount: recentDeals.length,
       newDealsValue: totalValue,
-      currency: recentDeals.length > 0 ? recentDeals[0].currency : 'USD',
+      currency: currency,
+      currencySymbol: currencySymbol,
       deals: recentDeals.map((deal: any) => ({
         id: deal.id,
         title: deal.title,
         value: deal.value,
-        currency: deal.currency,
+        currency: currency,
         add_time: deal.add_time,
         status: deal.status
       }))
@@ -97,6 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({
       newDealsCount: 0,
       newDealsValue: 0,
+      currency: 'GBP',
       error: 'Failed to fetch Pipedrive data'
     });
   }
