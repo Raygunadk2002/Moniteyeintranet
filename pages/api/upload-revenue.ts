@@ -420,7 +420,7 @@ function parseInvoiceDate(dateStr: string): Date | null {
           year >= 1990 && year <= 2100 && // Reasonable year range
           month >= 1 && month <= 12 && 
           day >= 1 && day <= 31) {
-        const date = new Date(year, month - 1, day);
+        const date: Date = new Date(year, month - 1, day);
         if (!isNaN(date.getTime()) && date.getFullYear() === year) {
           return date;
         }
