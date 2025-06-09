@@ -3,9 +3,9 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/": "pages/index.js",
-  "/api/team-holidays-metrics": "pages/api/team-holidays-metrics.js",
   "/api/dashboard-metrics": "pages/api/dashboard-metrics.js",
   "/api/pipedrive": "pages/api/pipedrive.js",
   "/api/tasks": "pages/api/tasks.js",
+  "/api/team-holidays-metrics": "pages/api/team-holidays-metrics.js",
   "/api/revenue-data": "pages/api/revenue-data.js"
 }
