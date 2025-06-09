@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/router';
 import { Card } from './ui/card';
 
 interface DashboardMetric {
@@ -23,6 +24,7 @@ interface RevenueTimeSeriesData {
 }
 
 export default function SimpleDashboard() {
+  const router = useRouter();
   const [timeRange, setTimeRange] = useState('7d');
   const [metrics, setMetrics] = useState<DashboardMetric[]>([
     {
@@ -92,6 +94,10 @@ export default function SimpleDashboard() {
   const [loading, setLoading] = useState(false); // TEMP: Start with false since we have initial data
   const [currentTime, setCurrentTime] = useState('');
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activities, setActivities] = useState<{action: string; user: string; time: string; type: string}[]>([
+    { action: 'Dashboard starting...', user: 'System', time: 'Just now', type: 'system' }
+  ]);
 
   // TEMP: Remove the test data useEffect since we're setting it in initial state
   // useEffect(() => {
@@ -188,21 +194,37 @@ export default function SimpleDashboard() {
             setRevenueData(data.charts.revenueData);
             console.log('✅ Revenue data set successfully');
           }
+
+          // Update activities with real data
+          if (data.activities && Array.isArray(data.activities)) {
+            setActivities(data.activities);
+            console.log('✅ Activities data set successfully:', data.activities.length, 'activities');
+          }
         } else {
           console.warn('⚠️ No metrics data in response');
         }
         
         // Fetch detailed revenue time series data
         console.log('📡 Fetching revenue time series data...');
-        const revenueResponse = await fetch('/api/revenue-data');
-        if (revenueResponse.ok) {
-          const revenueData = await revenueResponse.json();
-          if (revenueData.monthlyRevenue && Array.isArray(revenueData.monthlyRevenue)) {
-            setRevenueTimeSeriesData(revenueData.monthlyRevenue);
-            console.log('✅ Revenue time series data set successfully');
+        try {
+          const revenueResponse = await fetch('/api/revenue-data');
+          console.log('Revenue response status:', revenueResponse.status);
+          if (revenueResponse.ok) {
+            const revenueData = await revenueResponse.json();
+            console.log('Revenue data received:', revenueData);
+            if (revenueData.monthlyRevenue && Array.isArray(revenueData.monthlyRevenue)) {
+              console.log('Setting revenue time series data:', revenueData.monthlyRevenue.length, 'items');
+              console.log('First item:', revenueData.monthlyRevenue[0]);
+              setRevenueTimeSeriesData(revenueData.monthlyRevenue);
+              console.log('✅ Revenue time series data set successfully');
+            } else {
+              console.log('⚠️ No valid monthlyRevenue array found in response');
+            }
+          } else {
+            console.log('⚠️ Failed to fetch revenue time series data, status:', revenueResponse.status);
           }
-        } else {
-          console.log('⚠️ Failed to fetch revenue time series data');
+        } catch (error) {
+          console.error('❌ Error fetching revenue data:', error);
         }
         
         console.log('🎉 Dashboard data fetch completed successfully');
@@ -273,6 +295,12 @@ export default function SimpleDashboard() {
           { name: 'In Progress', value: 23, color: '#3B82F6' },
           { name: 'Pending', value: 12, color: '#F59E0B' }
         ]);
+        
+        // Set fallback activities
+        setActivities([
+          { action: 'Dashboard loaded with fallback data', user: 'System', time: 'Just now', type: 'system' },
+          { action: 'Using cached metrics', user: 'System', time: 'Now', type: 'system' }
+        ]);
         console.log('✅ Fallback data set');
         // Keep default revenue data on error
       } finally {
@@ -281,12 +309,12 @@ export default function SimpleDashboard() {
       }
     };
 
-    // TEMP: Disable auto-fetch for testing
-    // fetchDashboardData();
+    // Fetch dashboard data on component mount
+    fetchDashboardData();
 
     // Auto-refresh every 30 seconds
-    // const interval = setInterval(fetchDashboardData, 30000);
-    // return () => clearInterval(interval);
+    const interval = setInterval(fetchDashboardData, 30000);
+    return () => clearInterval(interval);
   }, [timeRange]);
 
   // Update time every second to avoid hydration issues
@@ -321,75 +349,75 @@ export default function SimpleDashboard() {
     window.location.href = '/tasks';
   }, []);
 
+  const handleRefreshDashboard = async () => {
+    setRefreshing(true);
+    try {
+      // Wait a bit to show the loading state
+      await new Promise(resolve => setTimeout(resolve, 500));
+      window.location.reload();
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       <div className="p-6">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 -mx-6 -mt-6 mb-6 sticky top-0 z-10">
+        <div className="bg-white border-b border-gray-200 px-6 py-4 -mx-6 -mt-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Analytics Dashboard</h1>
-              <p className="text-gray-600 mt-1">Monitor your business performance and key metrics</p>
+              <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
+              <p className="text-sm text-gray-600 mt-1">Monitor your key performance indicators and business metrics</p>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
-                {['24h', '7d', '30d', '90d'].map((range) => (
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                {['24h', '7d', '30d', '90d'].map((period) => (
                   <button
-                    key={range}
-                    onClick={() => setTimeRange(range)}
-                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                      timeRange === range
+                    key={period}
+                    onClick={() => setTimeRange(period)}
+                    className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                      timeRange === period
                         ? 'bg-white text-blue-600 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
-                    {range}
+                    {period}
                   </button>
                 ))}
               </div>
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
                 📊 New Report
               </button>
             </div>
           </div>
         </div>
 
-        {/* Key Metrics Grid */}
+        {/* Key Performance Indicators */}
         <section className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Key Performance Indicators</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {loading ? (
-              // Loading skeleton
-              Array.from({ length: 8 }).map((_, index) => (
-                <Card key={index} className="p-6 bg-white border border-gray-200">
-                  <div className="animate-pulse">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="w-8 h-8 bg-gray-200 rounded"></div>
-                      <div className="w-16 h-4 bg-gray-200 rounded"></div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="w-20 h-8 bg-gray-200 rounded"></div>
-                      <div className="w-24 h-4 bg-gray-200 rounded"></div>
-                    </div>
+            {metrics.slice(2).map((metric, index) => (
+              <Card key={index} className="p-6 bg-white hover:shadow-lg transition-shadow duration-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">{metric.title}</p>
+                    {(metric.title.includes('Revenue')) && (
+                      <p className="text-xs text-gray-500">VAT excluded</p>
+                    )}
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{metric.value}</p>
                   </div>
-                </Card>
-              ))
-            ) : (
-              metrics.map((metric, index) => (
-                <Card key={index} className="p-6 hover:shadow-lg transition-shadow bg-white border border-gray-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-2xl">{metric.icon}</span>
-                                          <span className={`text-xs font-medium ${getChangeColor(metric.changeType)} flex items-center px-2 py-1 rounded`}>
-                      {getChangeIcon(metric.changeType)} {metric.change}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-                    <p className="text-sm text-gray-600">{metric.title}</p>
-                  </div>
-                </Card>
-              ))
-            )}
+                  <div className="text-2xl">{metric.icon}</div>
+                </div>
+                <div className="mt-4 flex items-center">
+                  <span className={`text-sm font-medium ${getChangeColor(metric.changeType)}`}>
+                    {getChangeIcon(metric.changeType)} {metric.change}
+                  </span>
+                  <span className="text-sm text-gray-500 ml-2">from last month</span>
+                </div>
+              </Card>
+            ))}
           </div>
         </section>
 
@@ -514,13 +542,14 @@ export default function SimpleDashboard() {
             </div>
             
             <div className="relative w-full overflow-hidden">
-              <svg 
-                width="100%" 
-                height="320" 
-                viewBox="0 0 800 320"
-                className="transition-all duration-300 hover:scale-[1.01]"
-                onMouseLeave={() => setHoveredPoint(null)}
-              >
+              {revenueTimeSeriesData.length > 0 ? (
+                <svg 
+                  width="100%" 
+                  height="320" 
+                  viewBox="0 0 800 320"
+                  className="transition-all duration-300 hover:scale-[1.01]"
+                  onMouseLeave={() => setHoveredPoint(null)}
+                >
                 <defs>
                   <linearGradient id="revenueGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.3" />
@@ -536,44 +565,50 @@ export default function SimpleDashboard() {
                 </defs>
                 
                 {/* Grid Lines */}
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <g key={i}>
-                    <line
-                      x1="80"
-                      y1={60 + (i * (220 / 4))}
-                      x2="720"
-                      y2={60 + (i * (220 / 4))}
-                      stroke="#f3f4f6"
-                      strokeWidth="1"
-                      className="transition-opacity duration-300"
-                    />
-                    <text
-                      x="70"
-                      y={65 + (i * (220 / 4))}
-                      fill="#9ca3af"
-                      fontSize="12"
-                      textAnchor="end"
-                      className="transition-colors duration-300"
-                    >
-                      £{Math.round((Math.max(...revenueTimeSeriesData.map(d => d.revenue)) - (i * (Math.max(...revenueTimeSeriesData.map(d => d.revenue)) / 4))) / 1000)}k
-                    </text>
-                  </g>
-                ))}
+                {revenueTimeSeriesData.length > 0 && [0, 1, 2, 3, 4].map((i) => {
+                  const maxRevenue = Math.max(...revenueTimeSeriesData.map(d => d.revenue));
+                  return (
+                    <g key={i}>
+                      <line
+                        x1="80"
+                        y1={60 + (i * (220 / 4))}
+                        x2="720"
+                        y2={60 + (i * (220 / 4))}
+                        stroke="#f3f4f6"
+                        strokeWidth="1"
+                        className="transition-opacity duration-300"
+                      />
+                      <text
+                        x="70"
+                        y={65 + (i * (220 / 4))}
+                        fill="#9ca3af"
+                        fontSize="12"
+                        textAnchor="end"
+                        className="transition-colors duration-300"
+                      >
+                        £{Math.round((maxRevenue - (i * (maxRevenue / 4))) / 1000)}k
+                      </text>
+                    </g>
+                  );
+                })}
 
                 {/* Area Fill */}
-                <path
-                  d={`M 80 280 ${revenueTimeSeriesData.map((_, i) => {
-                    const chartWidth = 640; // Chart area width (720 - 80)
-                    const x = 80 + (chartWidth / (revenueTimeSeriesData.length - 1)) * i;
-                    const y = 60 + (220 * (1 - revenueTimeSeriesData[i].revenue / Math.max(...revenueTimeSeriesData.map(d => d.revenue))));
-                    return `L ${x} ${y}`;
-                  }).join(' ')} L ${80 + (640 / (revenueTimeSeriesData.length - 1)) * (revenueTimeSeriesData.length - 1)} 280 Z`}
-                  fill="url(#revenueGradient)"
-                  className="transition-all duration-300"
-                />
+                {revenueTimeSeriesData.length > 0 && (
+                  <path
+                    d={`M 80 280 ${revenueTimeSeriesData.map((_, i) => {
+                      const chartWidth = 640; // Chart area width (720 - 80)
+                      const x = 80 + (chartWidth / (revenueTimeSeriesData.length - 1)) * i;
+                      const maxRevenue = Math.max(...revenueTimeSeriesData.map(d => d.revenue));
+                      const y = 60 + (220 * (1 - revenueTimeSeriesData[i].revenue / maxRevenue));
+                      return `L ${x} ${y}`;
+                    }).join(' ')} L ${80 + (640 / (revenueTimeSeriesData.length - 1)) * (revenueTimeSeriesData.length - 1)} 280 Z`}
+                    fill="url(#revenueGradient)"
+                    className="transition-all duration-300"
+                  />
+                )}
 
                 {/* Trend Line */}
-                {(() => {
+                {revenueTimeSeriesData.length >= 2 && (() => {
                   // Calculate linear trend
                   const n = revenueTimeSeriesData.length;
                   const sumX = revenueTimeSeriesData.reduce((sum, _, i) => sum + i, 0);
@@ -581,7 +616,10 @@ export default function SimpleDashboard() {
                   const sumXY = revenueTimeSeriesData.reduce((sum, item, i) => sum + (i * item.revenue), 0);
                   const sumXX = revenueTimeSeriesData.reduce((sum, _, i) => sum + (i * i), 0);
                   
-                  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+                  const denominator = (n * sumXX - sumX * sumX);
+                  if (denominator === 0) return null;
+                  
+                  const slope = (n * sumXY - sumX * sumY) / denominator;
                   const intercept = (sumY - slope * sumX) / n;
                   
                   const startTrend = intercept;
@@ -610,18 +648,21 @@ export default function SimpleDashboard() {
                 })()}
 
                 {/* Revenue Line */}
-                <path
-                  d={`M ${revenueTimeSeriesData.map((_, i) => {
-                    const chartWidth = 640;
-                    const x = 80 + (chartWidth / (revenueTimeSeriesData.length - 1)) * i;
-                    const y = 60 + (220 * (1 - revenueTimeSeriesData[i].revenue / Math.max(...revenueTimeSeriesData.map(d => d.revenue))));
-                    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-                  }).join(' ')}`}
-                  fill="none"
-                  stroke="url(#lineGradient)"
-                  strokeWidth="3"
-                  className="transition-all duration-300 hover:stroke-width-4"
-                />
+                {revenueTimeSeriesData.length > 0 && (
+                  <path
+                    d={`${revenueTimeSeriesData.map((_, i) => {
+                      const chartWidth = 640;
+                      const x = 80 + (chartWidth / (revenueTimeSeriesData.length - 1)) * i;
+                      const maxRevenue = Math.max(...revenueTimeSeriesData.map(d => d.revenue));
+                      const y = 60 + (220 * (1 - revenueTimeSeriesData[i].revenue / maxRevenue));
+                      return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+                    }).join(' ')}`}
+                    fill="none"
+                    stroke="url(#lineGradient)"
+                    strokeWidth="3"
+                    className="transition-all duration-300 hover:stroke-width-4"
+                  />
+                )}
                 
                 <defs>
                   <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -631,10 +672,11 @@ export default function SimpleDashboard() {
                 </defs>
 
                 {/* Data Points */}
-                {revenueTimeSeriesData.map((item, i) => {
+                {revenueTimeSeriesData.length > 0 && revenueTimeSeriesData.map((item, i) => {
                   const chartWidth = 640;
                   const x = 80 + (chartWidth / (revenueTimeSeriesData.length - 1)) * i;
-                  const y = 60 + (220 * (1 - item.revenue / Math.max(...revenueTimeSeriesData.map(d => d.revenue))));
+                  const maxRevenue = Math.max(...revenueTimeSeriesData.map(d => d.revenue));
+                  const y = 60 + (220 * (1 - item.revenue / maxRevenue));
                   const isHovered = hoveredPoint === i;
                   
                   return (
@@ -707,6 +749,17 @@ export default function SimpleDashboard() {
                   </text>
                 ))}
               </svg>
+              ) : (
+                <div className="h-80 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <span className="text-2xl">📊</span>
+                    </div>
+                    <p className="text-gray-500 text-lg font-medium">Loading revenue data...</p>
+                    <p className="text-gray-400 text-sm mt-1">Chart will appear once data is loaded</p>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Summary Stats */}
@@ -715,25 +768,25 @@ export default function SimpleDashboard() {
                 <div className="group cursor-pointer p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                   <div className="text-sm text-gray-600 group-hover:text-gray-800">Latest</div>
                   <div className="text-xl font-semibold text-blue-600 group-hover:text-blue-700">
-                    £{((revenueTimeSeriesData[revenueTimeSeriesData.length - 1]?.revenue || 0) / 1000).toFixed(1)}k
+                    £{revenueTimeSeriesData.length > 0 ? ((revenueTimeSeriesData[revenueTimeSeriesData.length - 1]?.revenue || 0) / 1000).toFixed(1) : '0.0'}k
                   </div>
                 </div>
                 <div className="group cursor-pointer p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                   <div className="text-sm text-gray-600 group-hover:text-gray-800">Average</div>
                   <div className="text-xl font-semibold text-purple-600 group-hover:text-purple-700">
-                    £{(revenueTimeSeriesData.reduce((sum, item) => sum + item.revenue, 0) / revenueTimeSeriesData.length / 1000).toFixed(1)}k
+                    £{revenueTimeSeriesData.length > 0 ? (revenueTimeSeriesData.reduce((sum, item) => sum + item.revenue, 0) / revenueTimeSeriesData.length / 1000).toFixed(1) : '0.0'}k
                   </div>
                 </div>
                 <div className="group cursor-pointer p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                   <div className="text-sm text-gray-600 group-hover:text-gray-800">Peak</div>
                   <div className="text-xl font-semibold text-green-600 group-hover:text-green-700">
-                    £{(Math.max(...revenueTimeSeriesData.map(item => item.revenue)) / 1000).toFixed(1)}k
+                    £{revenueTimeSeriesData.length > 0 ? (Math.max(...revenueTimeSeriesData.map(item => item.revenue)) / 1000).toFixed(1) : '0.0'}k
                   </div>
                 </div>
                 <div className="group cursor-pointer p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200">
                   <div className="text-sm text-gray-600 group-hover:text-gray-800">Total</div>
                   <div className="text-xl font-semibold text-indigo-600 group-hover:text-indigo-700">
-                    £{(revenueTimeSeriesData.reduce((sum, item) => sum + item.revenue, 0) / 1000).toFixed(1)}k
+                    £{revenueTimeSeriesData.length > 0 ? (revenueTimeSeriesData.reduce((sum, item) => sum + item.revenue, 0) / 1000).toFixed(1) : '0.0'}k
                   </div>
                 </div>
               </div>
@@ -745,37 +798,59 @@ export default function SimpleDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Recent Activity */}
           <Card className="lg:col-span-2 p-6 bg-white">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+              <div className="flex items-center space-x-2 text-xs text-gray-500">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span>Live Data</span>
+              </div>
+            </div>
             <div className="space-y-4">
-              {[
-                { action: 'New task assigned', user: 'Alex Keal', time: '2 minutes ago', type: 'task' },
-                { action: 'Report generated', user: 'System', time: '15 minutes ago', type: 'report' },
-                { action: 'Holiday approved', user: 'Lucy Foster', time: '1 hour ago', type: 'holiday' },
-                { action: 'Energy alert triggered', user: 'Monitoring', time: '2 hours ago', type: 'alert' },
-                { action: 'New user registered', user: 'Mark Nockles', time: '3 hours ago', type: 'user' }
-              ].map((activity, index) => (
-                <div key={index} className="flex items-center space-x-4 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${
+              {activities.map((activity, index) => (
+                <div key={index} className="flex items-center space-x-4 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-transform duration-200 group-hover:scale-110 ${
                     activity.type === 'task' ? 'bg-blue-500' :
-                    activity.type === 'report' ? 'bg-green-500' :
+                    activity.type === 'deal' ? 'bg-green-500' :
                     activity.type === 'holiday' ? 'bg-yellow-500' :
-                    activity.type === 'alert' ? 'bg-red-500' : 'bg-purple-500'
+                    activity.type === 'alert' ? 'bg-red-500' : 
+                    activity.type === 'system' ? 'bg-gray-500' : 'bg-purple-500'
                   }`}>
                     {activity.type === 'task' ? '📋' :
-                     activity.type === 'report' ? '📊' :
+                     activity.type === 'deal' ? '💼' :
                      activity.type === 'holiday' ? '🏖️' :
-                     activity.type === 'alert' ? '⚠️' : '👤'}
+                     activity.type === 'alert' ? '⚠️' : 
+                     activity.type === 'system' ? '🔄' : '👤'}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{activity.action}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                      {activity.action}
+                    </p>
                     <div className="flex items-center space-x-2 text-xs text-gray-600">
-                      <span>{activity.user}</span>
+                      <span className="font-medium">{activity.user}</span>
                       <span>•</span>
                       <span>{activity.time}</span>
                     </div>
                   </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <div className={`w-1 h-8 rounded-full ${
+                      activity.type === 'task' ? 'bg-blue-200' :
+                      activity.type === 'deal' ? 'bg-green-200' :
+                      activity.type === 'holiday' ? 'bg-yellow-200' :
+                      activity.type === 'alert' ? 'bg-red-200' : 
+                      activity.type === 'system' ? 'bg-gray-200' : 'bg-purple-200'
+                    }`}></div>
+                  </div>
                 </div>
               ))}
+              {activities.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                    <span className="text-2xl">📋</span>
+                  </div>
+                  <p className="text-gray-500 text-sm">No recent activity</p>
+                  <p className="text-gray-400 text-xs mt-1">Activity will appear as it happens</p>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -784,20 +859,79 @@ export default function SimpleDashboard() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
             <div className="space-y-3">
               {[
-                { title: 'Create Task', icon: '➕', color: 'bg-blue-500', href: '/tasks' },
-                { title: 'View Calendar', icon: '📅', color: 'bg-green-500', href: '/calendar' },
-                { title: 'Generate Report', icon: '📄', color: 'bg-purple-500', href: '#' },
-                { title: 'System Settings', icon: '⚙️', color: 'bg-gray-500', href: '#' }
+                { 
+                  title: 'Create Task', 
+                  icon: '➕', 
+                  color: 'bg-blue-500 hover:bg-blue-600', 
+                  href: '/tasks',
+                  description: 'Add a new task to the board'
+                },
+                { 
+                  title: 'View Calendar', 
+                  icon: '📅', 
+                  color: 'bg-green-500 hover:bg-green-600', 
+                  href: '/calendar',
+                  description: 'Check team schedules and holidays'
+                },
+                { 
+                  title: 'Admin Panel', 
+                  icon: '🔧', 
+                  color: 'bg-purple-500 hover:bg-purple-600', 
+                  href: '/admin',
+                  description: 'Upload revenue data and manage settings'
+                },
+                { 
+                  title: 'Refresh Dashboard', 
+                  icon: '🔄', 
+                  color: 'bg-gray-500 hover:bg-gray-600', 
+                  href: '#refresh',
+                  description: 'Reload all dashboard data'
+                }
               ].map((action, index) => (
                 <button
                   key={index}
-                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                  onClick={() => action.href !== '#' && (window.location.href = action.href)}
+                  className={`w-full flex items-center space-x-3 p-3 rounded-lg transition-all duration-200 text-left group border border-transparent ${
+                    refreshing && action.href === '#refresh' 
+                      ? 'opacity-75 cursor-not-allowed bg-gray-50' 
+                      : 'hover:bg-gray-50 hover:border-gray-200 hover:shadow-sm'
+                  }`}
+                  onClick={() => {
+                    if (action.href === '#refresh') {
+                      handleRefreshDashboard();
+                    } else if (action.href !== '#') {
+                      router.push(action.href);
+                    }
+                  }}
+                  disabled={refreshing && action.href === '#refresh'}
+                  title={action.description}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (action.href === '#refresh') {
+                        handleRefreshDashboard();
+                      } else if (action.href !== '#') {
+                        router.push(action.href);
+                      }
+                    }
+                  }}
                 >
-                  <div className={`w-10 h-10 rounded-lg ${action.color} flex items-center justify-center text-white`}>
-                    {action.icon}
+                  <div className={`w-10 h-10 rounded-lg ${action.color} flex items-center justify-center text-white transition-all duration-200 group-hover:scale-105 group-hover:shadow-md`}>
+                    {action.href === '#refresh' && refreshing ? 
+                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      : action.icon
+                    }
                   </div>
-                  <span className="font-medium text-gray-900">{action.title}</span>
+                  <div className="flex-1">
+                    <span className="font-medium text-gray-900 group-hover:text-gray-700">{action.title}</span>
+                    <p className="text-xs text-gray-500 mt-0.5 group-hover:text-gray-600">{action.description}</p>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </button>
               ))}
             </div>

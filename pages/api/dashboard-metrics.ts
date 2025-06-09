@@ -9,6 +9,18 @@ function calculateTasksChange(openTasks: number, completedTasks: number): string
   return `${changePercentage > 0 ? '+' : ''}${changePercentage}%`;
 }
 
+interface RevenueDataMonth {
+  month: string;
+  revenue: number;
+  timestamp: string;
+}
+
+interface RevenueDataResponse {
+  monthlyRevenue: RevenueDataMonth[];
+  revenueData: number[];
+  totalRevenue: number;
+}
+
 interface DashboardData {
   metrics: {
     totalRevenue: { value: string; change: string; changeType: string };
@@ -87,6 +99,7 @@ export default async function handler(
       inReview: 0,
       columnCounts: {},
       completionRate: 0,
+      recentTasks: 0,
       tasks: [],
       columns: []
     };
@@ -99,7 +112,11 @@ export default async function handler(
 
     // Fetch revenue data
     const revenueResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/revenue-data`);
-    let revenueData = { revenueData: [12, 15, 18, 22, 19, 25] };
+    let revenueData: RevenueDataResponse = { 
+      revenueData: [12, 15, 18, 22, 19, 25],
+      monthlyRevenue: [],
+      totalRevenue: 0
+    };
     
     if (revenueResponse.ok) {
       revenueData = await revenueResponse.json();
@@ -116,6 +133,152 @@ export default async function handler(
 
     // Format currency for deals
     const currencySymbol = pipedriveData.currency === 'GBP' ? '£' : '$';
+
+    // Calculate 3M average and 12M total revenue from actual VAT-excluded data
+    let threeMonthAverage = '£0';
+    let threeMonthChange = '+0.0%';
+    let twelveMonthTotal = '£0';
+    let twelveMonthChange = '+0.0%';
+
+    if (revenueData.monthlyRevenue && Array.isArray(revenueData.monthlyRevenue) && revenueData.monthlyRevenue.length > 0) {
+      // Sort by month to ensure chronological order
+      const sortedRevenue = [...revenueData.monthlyRevenue].sort((a, b) => {
+        const dateA = new Date(a.month + ' 1');
+        const dateB = new Date(b.month + ' 1');
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      // Calculate 12M total (all available months, VAT already excluded)
+      const totalRevenue = sortedRevenue.reduce((sum, month) => sum + month.revenue, 0);
+      twelveMonthTotal = `£${Math.round(totalRevenue).toLocaleString()}`;
+
+      // Calculate 12M change (current year vs previous year if available)
+      if (sortedRevenue.length >= 12) {
+        const currentYearTotal = sortedRevenue.slice(-12).reduce((sum, month) => sum + month.revenue, 0);
+        const previousYearTotal = sortedRevenue.slice(-24, -12).reduce((sum, month) => sum + month.revenue, 0);
+        if (previousYearTotal > 0) {
+          const changePercent = ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100;
+          twelveMonthChange = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%`;
+        }
+      }
+
+      // Calculate 3M average (last 3 months, VAT already excluded)
+      if (sortedRevenue.length >= 3) {
+        const lastThreeMonths = sortedRevenue.slice(-3);
+        const threeMonthSum = lastThreeMonths.reduce((sum, month) => sum + month.revenue, 0);
+        const average = threeMonthSum / 3;
+        threeMonthAverage = `£${Math.round(average).toLocaleString()}`;
+
+        // Calculate 3M change (current 3M avg vs previous 3M avg)
+        if (sortedRevenue.length >= 6) {
+          const previousThreeMonths = sortedRevenue.slice(-6, -3);
+          const previousAverage = previousThreeMonths.reduce((sum, month) => sum + month.revenue, 0) / 3;
+          if (previousAverage > 0) {
+            const changePercent = ((average - previousAverage) / previousAverage) * 100;
+            threeMonthChange = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(1)}%`;
+          }
+        }
+      }
+    }
+
+    // Generate genuine activities with timestamps
+    const now = new Date();
+    const activities = [];
+
+    // Task-related activities
+    if (tasksData.total > 0) {
+      activities.push({
+        action: `${tasksData.open} open tasks requiring attention`,
+        user: 'Task System',
+        time: 'Live count',
+        type: 'task'
+      });
+
+      if (tasksData.completed > 0) {
+        activities.push({
+          action: `${tasksData.completed}/${tasksData.total} tasks completed (${tasksData.completionRate}% completion rate)`,
+          user: 'Project Team',
+          time: 'Current status',
+          type: 'task'
+        });
+      }
+
+      // Recent tasks activity if available
+      if (tasksData.recentTasks && tasksData.recentTasks > 0) {
+        activities.push({
+          action: `${tasksData.recentTasks} new tasks created`,
+          user: 'Team Members',
+          time: 'Last 7 days',
+          type: 'task'
+        });
+      }
+    }
+
+    // Holiday-related activities
+    if (teamHolidaysData.currentlyOnHoliday > 0) {
+      activities.push({
+        action: `${teamHolidaysData.currentlyOnHoliday} team ${teamHolidaysData.currentlyOnHoliday === 1 ? 'member' : 'members'} currently on holiday`,
+        user: 'HR System',
+        time: 'Right now',
+        type: 'holiday'
+      });
+    }
+
+    if (teamHolidaysData.next14Days > 0) {
+      activities.push({
+        action: `${teamHolidaysData.next14Days} upcoming ${teamHolidaysData.next14Days === 1 ? 'holiday' : 'holidays'} in next 2 weeks`,
+        user: 'Calendar System',
+        time: 'Next 14 days',
+        type: 'holiday'
+      });
+    }
+
+    // Sales/Deal activities
+    if (pipedriveData.newDealsCount > 0) {
+      activities.push({
+        action: `${pipedriveData.newDealsCount} new ${pipedriveData.newDealsCount === 1 ? 'deal' : 'deals'} worth ${currencySymbol}${pipedriveData.newDealsValue.toLocaleString()}`,
+        user: 'Sales Team',
+        time: 'Last 30 days',
+        type: 'deal'
+      });
+    }
+
+    // Revenue-related activities
+    if (revenueData.monthlyRevenue && revenueData.monthlyRevenue.length > 0) {
+      const latestMonth = revenueData.monthlyRevenue[revenueData.monthlyRevenue.length - 1];
+      if (latestMonth) {
+        activities.push({
+          action: `Revenue data updated - ${latestMonth.month}: £${(latestMonth.revenue / 1000).toFixed(1)}k (VAT excluded)`,
+          user: 'Finance System',
+          time: 'Latest available',
+          type: 'deal'
+        });
+      }
+    }
+
+    // System activities
+    activities.push({
+      action: 'Dashboard metrics refreshed with live data',
+      user: 'Analytics Engine',
+      time: 'Just now',
+      type: 'system'
+    });
+
+    // If we have very few activities, add some status information
+    if (activities.length < 4) {
+      activities.push({
+        action: 'All systems operational and monitoring',
+        user: 'System Monitor',
+        time: 'Continuous',
+        type: 'system'
+      });
+    }
+
+    // Sort activities by importance/recency (tasks and deals first, then others)
+    const sortedActivities = activities.sort((a, b) => {
+      const priority: { [key: string]: number } = { 'task': 1, 'deal': 2, 'holiday': 3, 'system': 4 };
+      return (priority[a.type] || 5) - (priority[b.type] || 5);
+    }).slice(0, 6); // Limit to 6 most important activities
 
     const dashboardData: DashboardData = {
       metrics: {
@@ -150,14 +313,14 @@ export default async function handler(
           changeType: 'neutral'
         },
         sixMonthAverage: {
-          value: '£72,564',
-          change: '+8.3%',
-          changeType: 'increase'
+          value: threeMonthAverage,
+          change: threeMonthChange,
+          changeType: threeMonthChange.startsWith('+') ? 'increase' : threeMonthChange.startsWith('-') ? 'decrease' : 'neutral'
         },
         twelveMonthTotal: {
-          value: '£864,379',
-          change: '+12.1%',
-          changeType: 'increase'
+          value: twelveMonthTotal,
+          change: twelveMonthChange,
+          changeType: twelveMonthChange.startsWith('+') ? 'increase' : twelveMonthChange.startsWith('-') ? 'decrease' : 'neutral'
         }
       },
       charts: {
@@ -191,13 +354,7 @@ export default async function handler(
           { name: 'No Tasks', value: 100, color: '#E5E7EB', count: 0 }
         ]
       },
-      activities: [
-        { action: `${tasksData.open} open tasks`, user: 'Task System', time: 'Live count', type: 'task' },
-        { action: `${tasksData.completed}/${tasksData.total} tasks completed (${tasksData.completionRate}%)`, user: 'Task System', time: 'Live stats', type: 'task' },
-        { action: `${teamHolidaysData.currentlyOnHoliday} team members on holiday`, user: 'Holiday System', time: 'Live count', type: 'holiday' },
-        { action: `${pipedriveData.newDealsCount} new deals (${currencySymbol}${pipedriveData.newDealsValue.toLocaleString()})`, user: 'Sales Team', time: 'Last 30 days', type: 'deal' },
-        { action: 'Dashboard refreshed', user: 'System', time: 'Just now', type: 'system' }
-      ]
+      activities: sortedActivities
     };
 
     res.status(200).json(dashboardData);
