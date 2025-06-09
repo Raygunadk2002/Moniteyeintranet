@@ -89,9 +89,9 @@ export default function SimpleDashboard() {
     { name: 'In Progress', value: 23, color: '#3B82F6', count: 2 },
     { name: 'Open', value: 12, color: '#F59E0B', count: 1 }
   ]); // Start with test data immediately
-  const [revenueData, setRevenueData] = useState<number[]>([45, 52, 48, 67, 73, 81, 94, 87, 95, 102, 89, 124]); // Default fallback
+  const [revenueData, setRevenueData] = useState<number[]>([52, 54, 57, 56, 69, 89, 64, 71, 71, 76, 109, 101]); // Real data from API
   const [revenueTimeSeriesData, setRevenueTimeSeriesData] = useState<RevenueTimeSeriesData[]>([]);
-  const [loading, setLoading] = useState(false); // TEMP: Start with false since we have initial data
+  const [loading, setLoading] = useState(true); // Start with true to show proper loading state
   const [currentTime, setCurrentTime] = useState('');
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,6 +106,20 @@ export default function SimpleDashboard() {
   //   setChartData([...]);
   //   console.log('✅ TEMP: Test data set, loading state is:', false);
   // }, []);
+
+  // Initialize data from localStorage on component mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('revenueTimeSeriesData');
+      if (stored) {
+        const parsedData = JSON.parse(stored);
+        setRevenueTimeSeriesData(parsedData);
+        console.log('🔄 Initialized revenue data from localStorage:', parsedData.length, 'items');
+      }
+    } catch (error) {
+      console.warn('Failed to initialize from localStorage:', error);
+    }
+  }, []);
 
   useEffect(() => {
     // Fetch real dashboard data from API
@@ -211,17 +225,44 @@ export default function SimpleDashboard() {
           console.log('Revenue response status:', revenueResponse.status);
           if (revenueResponse.ok) {
             const revenueData = await revenueResponse.json();
-            console.log('Revenue data received:', revenueData);
+            console.log('📊 Revenue data received:', revenueData);
+            
+            // Always update both chart data and time series data
+            if (revenueData.revenueData && Array.isArray(revenueData.revenueData)) {
+              setRevenueData(revenueData.revenueData);
+              console.log('✅ Revenue chart data updated:', revenueData.revenueData);
+            }
+            
             if (revenueData.monthlyRevenue && Array.isArray(revenueData.monthlyRevenue)) {
-              console.log('Setting revenue time series data:', revenueData.monthlyRevenue.length, 'items');
-              console.log('First item:', revenueData.monthlyRevenue[0]);
+              console.log('📈 Setting revenue time series data:', revenueData.monthlyRevenue.length, 'items');
+              console.log('Sample data:', revenueData.monthlyRevenue[0]);
               setRevenueTimeSeriesData(revenueData.monthlyRevenue);
               console.log('✅ Revenue time series data set successfully');
+              
+              // Store in localStorage for persistence
+              try {
+                localStorage.setItem('revenueTimeSeriesData', JSON.stringify(revenueData.monthlyRevenue));
+                localStorage.setItem('lastRevenueUpdate', new Date().toISOString());
+              } catch (error) {
+                console.warn('Failed to store revenue data in localStorage:', error);
+              }
             } else {
               console.log('⚠️ No valid monthlyRevenue array found in response');
             }
           } else {
             console.log('⚠️ Failed to fetch revenue time series data, status:', revenueResponse.status);
+            
+            // Try to load from localStorage as fallback
+            try {
+              const stored = localStorage.getItem('revenueTimeSeriesData');
+              if (stored) {
+                const parsedData = JSON.parse(stored);
+                setRevenueTimeSeriesData(parsedData);
+                console.log('📁 Loaded revenue data from localStorage:', parsedData.length, 'items');
+              }
+            } catch (error) {
+              console.warn('Failed to load revenue data from localStorage:', error);
+            }
           }
         } catch (error) {
           console.error('❌ Error fetching revenue data:', error);
@@ -432,21 +473,37 @@ export default function SimpleDashboard() {
                 <span>Revenue</span>
               </div>
             </div>
-            <div className="h-64 flex items-end justify-between space-x-2">
-              {revenueData.map((value, index) => {
-                const maxValue = Math.max(...revenueData);
-                return (
-                  <div key={index} className="flex-1 bg-blue-100 rounded-t relative group">
-                    <div 
-                      className="bg-blue-500 rounded-t transition-all duration-300 hover:bg-blue-600"
-                      style={{ height: `${(value / maxValue) * 200}px` }}
-                    ></div>
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="relative">
+              {/* Y-axis Labels */}
+              <div className="absolute left-0 top-0 h-64 flex flex-col justify-between text-xs text-gray-500 pr-2">
+                {[0, 1, 2, 3, 4].map((i) => {
+                  const maxValue = Math.max(...revenueData);
+                  const value = maxValue > 0 ? Math.round((maxValue - (i * (maxValue / 4)))) : (4 - i) * 25;
+                  return (
+                    <div key={i} className="text-right">
                       £{value}k
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              
+              {/* Chart Area */}
+              <div className="ml-12 h-64 flex items-end justify-between space-x-2">
+                {revenueData.map((value, index) => {
+                  const maxValue = Math.max(...revenueData);
+                  return (
+                    <div key={index} className="flex-1 bg-blue-100 rounded-t relative group">
+                      <div 
+                        className="bg-blue-500 rounded-t transition-all duration-300 hover:bg-blue-600"
+                        style={{ height: `${(value / maxValue) * 240}px` }}
+                      ></div>
+                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        £{value}k
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex justify-between text-xs text-gray-600 mt-2">
               {revenueData.length > 0 && (
@@ -752,11 +809,15 @@ export default function SimpleDashboard() {
               ) : (
                 <div className="h-80 flex items-center justify-center">
                   <div className="text-center">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center animate-pulse">
                       <span className="text-2xl">📊</span>
                     </div>
-                    <p className="text-gray-500 text-lg font-medium">Loading revenue data...</p>
-                    <p className="text-gray-400 text-sm mt-1">Chart will appear once data is loaded</p>
+                    <p className="text-gray-500 text-lg font-medium">
+                      {loading ? 'Loading revenue data...' : 'No revenue data available'}
+                    </p>
+                    <p className="text-gray-400 text-sm mt-1">
+                      {loading ? 'Chart will appear once data is loaded' : 'Upload revenue data to see chart'}
+                    </p>
                   </div>
                 </div>
               )}
