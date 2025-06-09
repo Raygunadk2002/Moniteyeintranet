@@ -53,21 +53,36 @@ export default async function handler(
   }
 
   try {
-    // Fetch holiday data from Timetastic to enhance dashboard metrics
-    const currentYear = new Date().getFullYear();
-    const holidayResponse = await fetch(`https://app.timetastic.co.uk/api/publicholidays?year=${currentYear}`, {
-      headers: {
-        'Authorization': `Bearer acf87e83-3e43-42df-b7d6-861a69f90414`,
-        'Content-Type': 'application/json'
+    // Fetch employee holiday data - enhanced error handling
+    let employeeData = [];
+    let upcomingHolidays = 0;
+    
+    try {
+      const employeeResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/team-holidays-metrics`);
+      
+      if (employeeResponse.ok) {
+        const empData = await employeeResponse.json();
+        // Ensure we have an array for filtering
+        if (Array.isArray(empData)) {
+          employeeData = empData;
+        } else if (empData && typeof empData === 'object') {
+          // Convert object to array format if needed
+          employeeData = Object.values(empData).filter(item => Array.isArray(item) ? item : []).flat();
+        }
+        
+        // Count upcoming holidays safely
+        upcomingHolidays = Array.isArray(employeeData) ? employeeData.filter((holiday: any) => {
+          if (!holiday || !holiday.date) return false;
+          const holidayDate = new Date(holiday.date);
+          const today = new Date();
+          return holidayDate > today;
+        }).length : 0;
       }
-    });
-
-    const holidayData = await holidayResponse.json();
-    const upcomingHolidays = Array.isArray(holidayData) ? holidayData.filter((holiday: any) => {
-      const holidayDate = new Date(holiday.date);
-      const today = new Date();
-      return holidayDate > today;
-    }).length : 0;
+    } catch (error) {
+      console.log('Failed to fetch employee holiday data:', error);
+      employeeData = [];
+      upcomingHolidays = 0;
+    }
 
     // Fetch team holiday metrics
     const teamHolidaysResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/team-holidays-metrics`);
