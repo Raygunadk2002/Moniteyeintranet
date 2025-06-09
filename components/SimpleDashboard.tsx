@@ -24,23 +24,102 @@ interface RevenueTimeSeriesData {
 
 export default function SimpleDashboard() {
   const [timeRange, setTimeRange] = useState('7d');
-  const [metrics, setMetrics] = useState<DashboardMetric[]>([]);
-  const [chartData, setChartData] = useState<ChartData[]>([]);
+  const [metrics, setMetrics] = useState<DashboardMetric[]>([
+    {
+      title: 'Total Revenue',
+      value: '£124,563',
+      change: '+12.5%',
+      changeType: 'increase',
+      icon: '💰'
+    },
+    {
+      title: 'Active Users',
+      value: '2,847',
+      change: '+8.2%',
+      changeType: 'increase',
+      icon: '👥'
+    },
+    {
+      title: 'New Deals (30d)',
+      value: '27',
+      change: '+8.7%',
+      changeType: 'increase',
+      icon: '🤝'
+    },
+    {
+      title: 'Deals Value (30d)',
+      value: '£605,132',
+      change: '+12.4%',
+      changeType: 'increase',
+      icon: '💼'
+    },
+    {
+      title: 'Open Tasks',
+      value: '7',
+      change: '-15.3%',
+      changeType: 'decrease',
+      icon: '✅'
+    },
+    {
+      title: 'Team Holidays (14d)',
+      value: '2',
+      change: '5 in 30d',
+      changeType: 'neutral',
+      icon: '🏖️'
+    },
+    {
+      title: '3M Avg Revenue',
+      value: '£72,564',
+      change: '+8.3%',
+      changeType: 'increase',
+      icon: '📊'
+    },
+    {
+      title: '12M Total Revenue',
+      value: '£864,379',
+      change: '+12.1%',
+      changeType: 'increase',
+      icon: '💼'
+    }
+  ]); // Start with test data immediately
+  const [chartData, setChartData] = useState<ChartData[]>([
+    { name: 'Completed', value: 65, color: '#10B981', count: 5 },
+    { name: 'In Progress', value: 23, color: '#3B82F6', count: 2 },
+    { name: 'Open', value: 12, color: '#F59E0B', count: 1 }
+  ]); // Start with test data immediately
   const [revenueData, setRevenueData] = useState<number[]>([45, 52, 48, 67, 73, 81, 94, 87, 95, 102, 89, 124]); // Default fallback
   const [revenueTimeSeriesData, setRevenueTimeSeriesData] = useState<RevenueTimeSeriesData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // TEMP: Start with false since we have initial data
   const [currentTime, setCurrentTime] = useState('');
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
+
+  // TEMP: Remove the test data useEffect since we're setting it in initial state
+  // useEffect(() => {
+  //   console.log('🔧 TEMP: Setting test metrics data immediately');
+  //   setMetrics([...]);
+  //   setChartData([...]);
+  //   console.log('✅ TEMP: Test data set, loading state is:', false);
+  // }, []);
 
   useEffect(() => {
     // Fetch real dashboard data from API
     const fetchDashboardData = async () => {
+      console.log('🔄 Starting dashboard data fetch...');
       setLoading(true);
       try {
+        console.log('📡 Fetching dashboard metrics...');
         const response = await fetch('/api/dashboard-metrics');
+        console.log('📡 Response status:', response.status, response.ok);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('📊 Received dashboard data:', data);
         
         if (data.metrics) {
+          console.log('✅ Setting metrics data...');
           setMetrics([
             {
               title: 'Total Revenue',
@@ -99,25 +178,36 @@ export default function SimpleDashboard() {
               icon: '💼'
             }
           ]);
+          console.log('✅ Metrics set successfully');
           
           setChartData(data.charts.taskDistribution);
+          console.log('✅ Chart data set successfully');
           
           // Update revenue chart data if available
           if (data.charts.revenueData && Array.isArray(data.charts.revenueData) && data.charts.revenueData.length > 0) {
             setRevenueData(data.charts.revenueData);
+            console.log('✅ Revenue data set successfully');
           }
+        } else {
+          console.warn('⚠️ No metrics data in response');
         }
         
         // Fetch detailed revenue time series data
+        console.log('📡 Fetching revenue time series data...');
         const revenueResponse = await fetch('/api/revenue-data');
         if (revenueResponse.ok) {
           const revenueData = await revenueResponse.json();
           if (revenueData.monthlyRevenue && Array.isArray(revenueData.monthlyRevenue)) {
             setRevenueTimeSeriesData(revenueData.monthlyRevenue);
+            console.log('✅ Revenue time series data set successfully');
           }
+        } else {
+          console.log('⚠️ Failed to fetch revenue time series data');
         }
+        
+        console.log('🎉 Dashboard data fetch completed successfully');
       } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
+        console.error('❌ Failed to fetch dashboard data:', error);
         // Fallback to static data
         setMetrics([
           {
@@ -183,17 +273,20 @@ export default function SimpleDashboard() {
           { name: 'In Progress', value: 23, color: '#3B82F6' },
           { name: 'Pending', value: 12, color: '#F59E0B' }
         ]);
+        console.log('✅ Fallback data set');
         // Keep default revenue data on error
       } finally {
+        console.log('🏁 Setting loading to false');
         setLoading(false);
       }
     };
 
-    fetchDashboardData();
+    // TEMP: Disable auto-fetch for testing
+    // fetchDashboardData();
 
     // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
+    // const interval = setInterval(fetchDashboardData, 30000);
+    // return () => clearInterval(interval);
   }, [timeRange]);
 
   // Update time every second to avoid hydration issues
