@@ -8,10 +8,11 @@
 - ✅ Created `vercel.json` configuration
 - ✅ Build successful with no errors
 
-### 2. Environment Variables Required
+### 2. Environment Variables Setup
 
-Set these in your Vercel dashboard under Project Settings > Environment Variables:
+**IMPORTANT:** Set these environment variables directly in your Vercel project dashboard under **Project Settings > Environment Variables**. Do NOT create them as secrets.
 
+**Required Environment Variables:**
 ```bash
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
@@ -26,28 +27,66 @@ TIMETASTIC_ACCESS_TOKEN=your_timetastic_access_token
 NODE_ENV=production
 ```
 
+### 3. Setting Environment Variables in Vercel
+
+1. Go to your Vercel project dashboard
+2. Navigate to **Settings** > **Environment Variables**
+3. Add each variable with its corresponding value
+4. Select environment scope: **Production**, **Preview**, and **Development**
+5. Click **Save**
+
 ## Deployment Steps
 
-### Option 1: Vercel CLI (Recommended)
+### Option 1: Vercel CLI (Fastest)
 ```bash
-# Install Vercel CLI
 npm i -g vercel
-
-# Login to Vercel
 vercel login
-
-# Deploy
-vercel
-
-# For production deployment
 vercel --prod
 ```
 
 ### Option 2: GitHub Integration
-1. Push code to GitHub repository
-2. Connect repository to Vercel
-3. Configure environment variables in Vercel dashboard
-4. Deploy automatically on push
+1. Go to [vercel.com](https://vercel.com)
+2. Click **"New Project"**
+3. Import your GitHub repository
+4. Configure the environment variables in project settings (see above)
+5. Deploy
+
+### Option 3: Deploy via Vercel Dashboard
+1. Go to Vercel dashboard
+2. Click **"Add New..."** > **"Project"**
+3. Import from GitHub
+4. Set environment variables
+5. Deploy
+
+## ✅ Build Verification
+
+Your build should now succeed! The configuration fixes include:
+
+- **PostCSS Issues**: Fixed TailwindCSS plugin configuration
+- **Next.js Optimization**: Standalone output for Vercel
+- **Environment Variables**: Properly configured for Vercel deployment
+- **API Routes**: Optimized timeout settings
+
+## 🚀 Post-Deployment
+
+After successful deployment, verify:
+
+1. **Dashboard loads** at your Vercel URL
+2. **Environment variables** are properly set
+3. **API endpoints** are functioning
+4. **Database connections** to Supabase work
+5. **External integrations** (Pipedrive, Timetastic) connect properly
+
+## 🔧 Troubleshooting
+
+If deployment fails:
+
+1. **Check environment variables** are set correctly
+2. **Verify Supabase connection** in project settings
+3. **Review build logs** in Vercel dashboard
+4. **Test locally** with `npm run build` first
+
+Your project is now ready for production deployment on Vercel! 🎉
 
 ## Post-Deployment
 

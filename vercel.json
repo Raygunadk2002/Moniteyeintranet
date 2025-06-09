@@ -12,12 +12,5 @@
     "pages/api/**/*.js": {
       "maxDuration": 30
     }
-  },
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
-    "SUPABASE_SERVICE_ROLE_KEY": "@supabase-service-role-key",
-    "PIPEDRIVE_API_TOKEN": "@pipedrive-api-token",
-    "TIMETASTIC_ACCESS_TOKEN": "@timetastic-access-token"
   }
 } 
