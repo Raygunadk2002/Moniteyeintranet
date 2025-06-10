@@ -53,12 +53,19 @@ export default async function handler(
   }
 
   try {
+    // Get the base URL for internal API calls
+    const baseUrl = req.headers.host 
+      ? `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`
+      : 'http://localhost:3000';
+    
+    console.log('Dashboard API using base URL:', baseUrl);
+    
     // Fetch employee holiday data - enhanced error handling
     let employeeData: any[] = [];
     let upcomingHolidays = 0;
     
     try {
-      const employeeResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/team-holidays-metrics`);
+      const employeeResponse = await fetch(`${baseUrl}/api/team-holidays-metrics`);
       
       if (employeeResponse.ok) {
         const empData = await employeeResponse.json();
@@ -124,7 +131,7 @@ export default async function handler(
     let teamHolidaysData = { next14Days: 0, next30Days: 0, currentlyOnHoliday: 0, totalUpcoming: 0 };
     
     try {
-      const teamHolidaysResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/team-holidays-metrics`);
+      const teamHolidaysResponse = await fetch(`${baseUrl}/api/team-holidays-metrics`);
       
       if (teamHolidaysResponse.ok) {
         const data = await teamHolidaysResponse.json();
@@ -142,7 +149,7 @@ export default async function handler(
     let pipedriveData = { newDealsCount: 0, newDealsValue: 0, currency: 'GBP' };
     
     try {
-      const pipedriveResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/pipedrive`);
+      const pipedriveResponse = await fetch(`${baseUrl}/api/pipedrive`);
       
       if (pipedriveResponse.ok) {
         const data = await pipedriveResponse.json();
@@ -173,7 +180,7 @@ export default async function handler(
     };
     
     try {
-      const tasksResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/tasks`);
+      const tasksResponse = await fetch(`${baseUrl}/api/tasks`);
       
       if (tasksResponse.ok) {
         const data = await tasksResponse.json();
@@ -195,7 +202,7 @@ export default async function handler(
     };
     
     try {
-      const revenueResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/revenue-data`);
+      const revenueResponse = await fetch(`${baseUrl}/api/revenue-data`);
       
       if (revenueResponse.ok) {
         const data = await revenueResponse.json();
