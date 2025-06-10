@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { Card } from './ui/card';
+import MarketingDashboard from './MarketingDashboard';
 
 interface DashboardMetric {
   title: string;
@@ -23,9 +24,18 @@ interface RevenueTimeSeriesData {
   timestamp: string;
 }
 
+interface CustomKPI {
+  id: string;
+  title: string;
+  value: string;
+  emoji: string;
+  enabled: boolean;
+}
+
 export default function SimpleDashboard() {
   const router = useRouter();
   const [timeRange, setTimeRange] = useState('7d');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [metrics, setMetrics] = useState<DashboardMetric[]>([
     {
       title: 'Total Revenue',
@@ -98,6 +108,8 @@ export default function SimpleDashboard() {
   const [activities, setActivities] = useState<{action: string; user: string; time: string; type: string}[]>([
     { action: 'Dashboard starting...', user: 'System', time: 'Just now', type: 'system' }
   ]);
+  const [customKPIs, setCustomKPIs] = useState<CustomKPI[]>([]);
+  const [isClient, setIsClient] = useState(false);
 
   // TEMP: Remove the test data useEffect since we're setting it in initial state
   // useEffect(() => {
@@ -120,6 +132,43 @@ export default function SimpleDashboard() {
       console.warn('Failed to initialize from localStorage:', error);
     }
   }, []);
+
+  // Initialize client-side only state
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Load custom KPIs from localStorage (client-side only)
+  useEffect(() => {
+    if (!isClient) return;
+
+    const loadCustomKPIs = () => {
+      try {
+        const stored = localStorage.getItem('customKPIs');
+        if (stored) {
+          const parsedKPIs = JSON.parse(stored);
+          setCustomKPIs(parsedKPIs);
+          console.log('🎯 Loaded custom KPIs from localStorage:', parsedKPIs.length, 'items');
+        }
+      } catch (error) {
+        console.warn('Failed to load custom KPIs from localStorage:', error);
+      }
+    };
+
+    // Load initially
+    loadCustomKPIs();
+
+    // Listen for storage changes (when updated from admin page)
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'customKPIs') {
+        loadCustomKPIs();
+        console.log('🔄 Custom KPIs updated from admin page, reloading...');
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [isClient]);
 
   useEffect(() => {
     // Fetch real dashboard data from API
@@ -424,8 +473,14 @@ export default function SimpleDashboard() {
         <div className="bg-white border-b border-gray-200 px-6 py-4 -mx-6 -mt-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h1>
-              <p className="text-sm text-gray-600 mt-1">Monitor your key performance indicators and business metrics</p>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {activeTab === 'dashboard' ? 'Business Dashboard' : 'Marketing Analytics'}
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                {activeTab === 'dashboard' 
+                  ? 'Monitor your key performance indicators and business metrics'
+                  : 'Track your website performance and visitor analytics'}
+              </p>
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex bg-gray-100 rounded-lg p-1">
@@ -459,10 +514,39 @@ export default function SimpleDashboard() {
               </button>
             </div>
           </div>
+
+          {/* Tab Navigation */}
+          <div className="mt-6 border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'dashboard'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                📊 Business Dashboard
+              </button>
+              <button
+                onClick={() => setActiveTab('marketing')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'marketing'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                📈 Marketing Analytics
+              </button>
+            </nav>
+          </div>
         </div>
 
-        {/* Key Performance Indicators */}
-        <section className="mb-8">
+        {/* Tab Content */}
+        {activeTab === 'dashboard' && (
+          <>
+            {/* Key Performance Indicators */}
+            <section className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Key Performance Indicators</h2>
             <div className="flex items-center space-x-2">
@@ -474,6 +558,7 @@ export default function SimpleDashboard() {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {/* Standard KPI Metrics */}
             {metrics.slice(2).map((metric, index) => (
               <Card key={index} className="p-6 bg-white hover:shadow-lg transition-shadow duration-200">
                 <div className="flex items-center justify-between">
@@ -491,6 +576,20 @@ export default function SimpleDashboard() {
                     {getChangeIcon(metric.changeType)} {metric.change}
                   </span>
                   <span className="text-sm text-gray-500 ml-2">from last month</span>
+                </div>
+              </Card>
+            ))}
+            
+            {/* Custom KPI Tiles - Only render on client to avoid hydration issues */}
+            {isClient && customKPIs.filter(kpi => kpi.enabled && kpi.title && kpi.value).map((kpi) => (
+              <Card key={`custom-${kpi.id}`} className="p-6 bg-white hover:shadow-lg transition-shadow duration-200 border-l-4 border-l-purple-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">{kpi.title}</p>
+                    <p className="text-xs text-purple-600 font-medium">Custom KPI</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{kpi.value}</p>
+                  </div>
+                  <div className="text-2xl">{kpi.emoji}</div>
                 </div>
               </Card>
             ))}
@@ -1039,20 +1138,27 @@ export default function SimpleDashboard() {
           </Card>
         </div>
 
-        {/* Footer Stats */}
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <div className="flex items-center space-x-6">
-              <span>Last updated: {currentTime || '--:--:--'}</span>
-              <span>•</span>
-              <span>Auto-refresh: On</span>
+            {/* Footer Stats */}
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <div className="flex items-center space-x-6">
+                  <span>Last updated: {currentTime || '--:--:--'}</span>
+                  <span>•</span>
+                  <span>Auto-refresh: On</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>System Online</span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span>System Online</span>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
+
+        {/* Marketing Tab Content */}
+        {activeTab === 'marketing' && (
+          <MarketingDashboard />
+        )}
       </div>
     </div>
   );

@@ -20,6 +20,7 @@
     "@fullcalendar/interaction": "^6.1.17",
     "@fullcalendar/react": "^6.1.17",
     "@fullcalendar/timegrid": "^6.1.17",
+    "@google-analytics/data": "^5.1.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@supabase/supabase-js": "^2.50.0",
     "@types/formidable": "^3.4.5",

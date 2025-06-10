@@ -22,18 +22,22 @@ function removeVAT(amount: number): number {
 
 // Enhanced fallback data with realistic monthly progression
 function getDefaultData(): RevenueDataFile {
-  // Generate 12 months of realistic data
+  // Generate 12 months of realistic data with current date variations
+  const now = new Date();
   const monthNames = [
-    'January 2024', 'February 2024', 'March 2024', 'April 2024', 
-    'May 2024', 'June 2024', 'July 2024', 'August 2024', 
-    'September 2024', 'October 2024', 'November 2024', 'December 2024'
+    'June 2024', 'July 2024', 'August 2024', 'September 2024', 
+    'October 2024', 'November 2024', 'December 2024', 'January 2025', 
+    'February 2025', 'March 2025', 'April 2025', 'May 2025'
   ];
   
-  // Base monthly revenues with seasonal variation (no VAT)
-  const baseAmounts = [
-    45000, 52000, 58000, 67000, 73000, 81000, 
-    94000, 87000, 95000, 102000, 89000, 124000
+  // Actual revenue figures from uploaded spreadsheet (before VAT removal)
+  const baseAmountsWithVAT = [
+    51820.8, 53623.0, 56546.0, 55571.8, 69263.8, 89365.0,
+    64432.8, 70200.0, 71349.72, 72365.48, 109242.0, 100598.4
   ];
+  
+  // Remove VAT from the amounts
+  const baseAmounts = baseAmountsWithVAT.map(amount => removeVAT(amount));
   
   const timestamp = new Date().toISOString();
   
@@ -42,13 +46,13 @@ function getDefaultData(): RevenueDataFile {
     revenue: baseAmounts[index],
     timestamp
   }));
-  
+
   return {
+    revenueData: baseAmounts.map(amount => Math.round(amount / 1000)), // Convert to thousands for chart
     monthlyRevenue,
-    lastUpdated: timestamp,
     totalRevenue: baseAmounts.reduce((sum, amount) => sum + amount, 0),
-    revenueChange: '+12.5%',
-    revenueData: baseAmounts.map(amount => Math.round(amount / 1000)) // Convert to thousands for chart
+    lastUpdated: timestamp,
+    revenueChange: '+12.5%'
   };
 }
 

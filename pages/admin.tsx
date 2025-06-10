@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 
 interface UploadResult {
@@ -14,12 +14,64 @@ interface UploadResult {
   suggestions?: string[];
 }
 
+interface CustomKPI {
+  id: string;
+  title: string;
+  value: string;
+  emoji: string;
+  enabled: boolean;
+}
+
 export default function Admin() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [testingDatabase, setTestingDatabase] = useState(false);
   const [databaseStatus, setDatabaseStatus] = useState<any>(null);
+  
+  // Custom KPI Management
+  const [customKPIs, setCustomKPIs] = useState<CustomKPI[]>([
+    { id: '1', title: '', value: '', emoji: '📊', enabled: false },
+    { id: '2', title: '', value: '', emoji: '💰', enabled: false }
+  ]);
+  const [isClient, setIsClient] = useState(false);
+
+  // Load custom KPIs from localStorage after component mounts (client-side only)
+  useEffect(() => {
+    setIsClient(true);
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('customKPIs');
+      if (stored) {
+        try {
+          const parsedKPIs = JSON.parse(stored);
+          setCustomKPIs(parsedKPIs);
+        } catch (error) {
+          console.warn('Failed to load custom KPIs from localStorage:', error);
+        }
+      }
+    }
+  }, []);
+
+  const saveCustomKPIs = (kpis: CustomKPI[]) => {
+    setCustomKPIs(kpis);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('customKPIs', JSON.stringify(kpis));
+    }
+  };
+
+  const handleCustomKPIChange = (id: string, field: keyof CustomKPI, value: string | boolean) => {
+    const updatedKPIs = customKPIs.map(kpi => 
+      kpi.id === id ? { ...kpi, [field]: value } : kpi
+    );
+    saveCustomKPIs(updatedKPIs);
+  };
+
+  const resetCustomKPI = (id: string) => {
+    const updatedKPIs = customKPIs.map(kpi => 
+      kpi.id === id ? { ...kpi, title: '', value: '', emoji: '📊', enabled: false } : kpi
+    );
+    saveCustomKPIs(updatedKPIs);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -172,6 +224,120 @@ export default function Admin() {
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Custom KPI Management Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">🎯 Custom KPI Management</h2>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+                <h3 className="text-sm font-medium text-blue-800 mb-2">💡 Custom KPI Tiles</h3>
+                <p className="text-sm text-blue-700">
+                  Add up to 2 additional KPI tiles to your dashboard with custom titles, values, and emojis. 
+                  These are static values that you can update manually anytime.
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                {customKPIs.map((kpi, index) => (
+                  <div key={kpi.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-md font-medium text-gray-900">Custom KPI #{index + 1}</h3>
+                      <div className="flex items-center space-x-3">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={kpi.enabled}
+                            onChange={(e) => handleCustomKPIChange(kpi.id, 'enabled', e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">Enable</span>
+                        </label>
+                        <button
+                          onClick={() => resetCustomKPI(kpi.id)}
+                          className="text-sm text-red-600 hover:text-red-800"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Emoji
+                        </label>
+                        <input
+                          type="text"
+                          value={kpi.emoji}
+                          onChange={(e) => handleCustomKPIChange(kpi.id, 'emoji', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-center text-2xl"
+                          placeholder="📊"
+                          maxLength={2}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Single emoji only</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Title
+                        </label>
+                        <input
+                          type="text"
+                          value={kpi.title}
+                          onChange={(e) => handleCustomKPIChange(kpi.id, 'title', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., Customer Satisfaction"
+                          maxLength={50}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Max 50 characters</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Value
+                        </label>
+                        <input
+                          type="text"
+                          value={kpi.value}
+                          onChange={(e) => handleCustomKPIChange(kpi.id, 'value', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., 98.5% or £125,000"
+                          maxLength={20}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Max 20 characters</p>
+                      </div>
+                    </div>
+
+                    {/* Preview */}
+                    {kpi.enabled && kpi.title && kpi.value && (
+                      <div className="mt-4 p-3 bg-gray-50 rounded-md">
+                        <p className="text-xs text-gray-600 font-medium mb-2">Preview:</p>
+                        <div className="bg-white p-4 rounded-lg border border-gray-200 inline-block">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-gray-600">{kpi.title}</p>
+                              <p className="text-xl font-bold text-gray-900 mt-1">{kpi.value}</p>
+                            </div>
+                            <div className="text-2xl">{kpi.emoji}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 bg-green-50 border border-green-200 rounded-md p-4">
+                <h3 className="text-sm font-medium text-green-800 mb-2">✅ Quick Setup Tips</h3>
+                <ul className="text-sm text-green-700 space-y-1">
+                  <li>• Enable the toggle to show the KPI tile on your dashboard</li>
+                  <li>• Use clear, descriptive titles (e.g., "Customer Satisfaction", "Team Size")</li>
+                  <li>• Include units in your values (e.g., "98.5%", "£125,000", "42 people")</li>
+                  <li>• Choose relevant emojis that represent your metric (📈, 👥, ⭐, 🎯)</li>
+                  <li>• Changes are saved automatically and appear immediately on the dashboard</li>
+                </ul>
               </div>
             </div>
 
