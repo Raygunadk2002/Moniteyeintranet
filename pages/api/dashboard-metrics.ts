@@ -54,7 +54,7 @@ export default async function handler(
 
   try {
     // Fetch employee holiday data - enhanced error handling
-    let employeeData = [];
+    let employeeData: any[] = [];
     let upcomingHolidays = 0;
     
     try {
@@ -62,50 +62,103 @@ export default async function handler(
       
       if (employeeResponse.ok) {
         const empData = await employeeResponse.json();
-        // Ensure we have an array for filtering
+        
+        // Comprehensive data validation and normalization
         if (Array.isArray(empData)) {
           employeeData = empData;
         } else if (empData && typeof empData === 'object') {
-          // Convert object to array format if needed
-          employeeData = Object.values(empData).filter(item => Array.isArray(item) ? item : []).flat();
+          // Handle various response formats
+          if (empData.data && Array.isArray(empData.data)) {
+            employeeData = empData.data;
+          } else if (empData.holidays && Array.isArray(empData.holidays)) {
+            employeeData = empData.holidays;
+          } else {
+            // Convert object properties to array
+            const values = Object.values(empData);
+            employeeData = values.filter((item: any) => 
+              item && typeof item === 'object' && item.date
+            );
+          }
+        } else {
+          employeeData = [];
         }
         
-        // Count upcoming holidays safely
-        upcomingHolidays = Array.isArray(employeeData) ? employeeData.filter((holiday: any) => {
-          if (!holiday || !holiday.date) return false;
-          const holidayDate = new Date(holiday.date);
-          const today = new Date();
-          return holidayDate > today;
-        }).length : 0;
+        // Ensure employeeData is always an array before filtering
+        if (!Array.isArray(employeeData)) {
+          console.warn('Employee data is not an array, converting to empty array');
+          employeeData = [];
+        }
+        
+        // Count upcoming holidays safely with validation
+        upcomingHolidays = employeeData.filter((holiday: any) => {
+          try {
+            if (!holiday || typeof holiday !== 'object' || !holiday.date) {
+              return false;
+            }
+            
+            const holidayDate = new Date(holiday.date);
+            const today = new Date();
+            
+            // Validate date is valid
+            if (isNaN(holidayDate.getTime())) {
+              return false;
+            }
+            
+            return holidayDate > today;
+          } catch (error) {
+            console.warn('Error processing holiday date:', error);
+            return false;
+          }
+        }).length;
+        
+      } else {
+        console.warn(`Employee holidays API returned ${employeeResponse.status}: ${employeeResponse.statusText}`);
       }
     } catch (error) {
-      console.log('Failed to fetch employee holiday data:', error);
+      console.error('Failed to fetch employee holiday data:', error);
       employeeData = [];
       upcomingHolidays = 0;
     }
 
-    // Fetch team holiday metrics
-    const teamHolidaysResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/team-holidays-metrics`);
+    // Fetch team holiday metrics with error handling
     let teamHolidaysData = { next14Days: 0, next30Days: 0, currentlyOnHoliday: 0, totalUpcoming: 0 };
     
-    if (teamHolidaysResponse.ok) {
-      teamHolidaysData = await teamHolidaysResponse.json();
-    } else {
-      console.log('Failed to fetch team holidays data');
+    try {
+      const teamHolidaysResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/team-holidays-metrics`);
+      
+      if (teamHolidaysResponse.ok) {
+        const data = await teamHolidaysResponse.json();
+        if (data && typeof data === 'object') {
+          teamHolidaysData = { ...teamHolidaysData, ...data };
+        }
+      } else {
+        console.warn(`Team holidays API returned ${teamHolidaysResponse.status}: ${teamHolidaysResponse.statusText}`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch team holidays data:', error);
     }
 
-    // Fetch Pipedrive data
-    const pipedriveResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/pipedrive`);
-    let pipedriveData = { newDealsCount: 0, newDealsValue: 0, currency: 'USD' };
+    // Fetch Pipedrive data with error handling
+    let pipedriveData = { newDealsCount: 0, newDealsValue: 0, currency: 'GBP' };
     
-    if (pipedriveResponse.ok) {
-      pipedriveData = await pipedriveResponse.json();
-    } else {
-      console.log('Failed to fetch Pipedrive data');
+    try {
+      const pipedriveResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/pipedrive`);
+      
+      if (pipedriveResponse.ok) {
+        const data = await pipedriveResponse.json();
+        if (data && typeof data === 'object') {
+          pipedriveData = { ...pipedriveData, ...data };
+          // Ensure currency is GBP for UK business
+          pipedriveData.currency = 'GBP';
+        }
+      } else {
+        console.warn(`Pipedrive API returned ${pipedriveResponse.status}: ${pipedriveResponse.statusText}`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch Pipedrive data:', error);
     }
 
-    // Fetch LIVE Tasks data from tasks API
-    const tasksResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/tasks`);
+    // Fetch LIVE Tasks data from tasks API with error handling
     let tasksData = { 
       total: 0, 
       open: 0, 
@@ -119,24 +172,41 @@ export default async function handler(
       columns: []
     };
     
-    if (tasksResponse.ok) {
-      tasksData = await tasksResponse.json();
-    } else {
-      console.log('Failed to fetch tasks data');
+    try {
+      const tasksResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/tasks`);
+      
+      if (tasksResponse.ok) {
+        const data = await tasksResponse.json();
+        if (data && typeof data === 'object') {
+          tasksData = { ...tasksData, ...data };
+        }
+      } else {
+        console.warn(`Tasks API returned ${tasksResponse.status}: ${tasksResponse.statusText}`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch tasks data:', error);
     }
 
-    // Fetch revenue data
-    const revenueResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/revenue-data`);
+    // Fetch revenue data with error handling
     let revenueData: RevenueDataResponse = { 
       revenueData: [12, 15, 18, 22, 19, 25],
       monthlyRevenue: [],
       totalRevenue: 0
     };
     
-    if (revenueResponse.ok) {
-      revenueData = await revenueResponse.json();
-    } else {
-      console.log('Failed to fetch revenue data');
+    try {
+      const revenueResponse = await fetch(`${req.headers.origin || 'http://localhost:3000'}/api/revenue-data`);
+      
+      if (revenueResponse.ok) {
+        const data = await revenueResponse.json();
+        if (data && typeof data === 'object') {
+          revenueData = { ...revenueData, ...data };
+        }
+      } else {
+        console.warn(`Revenue API returned ${revenueResponse.status}: ${revenueResponse.statusText}`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch revenue data:', error);
     }
 
     // Calculate completion percentage

@@ -126,9 +126,15 @@ export default function SimpleDashboard() {
     const fetchDashboardData = async () => {
       console.log('🔄 Starting dashboard data fetch...');
       setLoading(true);
+      setRefreshing(true);
       try {
         console.log('📡 Fetching dashboard metrics...');
-        const response = await fetch('/api/dashboard-metrics');
+        const response = await fetch('/api/dashboard-metrics', {
+          cache: 'no-store', // Ensure fresh data
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
         console.log('📡 Response status:', response.status, response.ok);
         
         if (!response.ok) {
@@ -233,7 +239,7 @@ export default function SimpleDashboard() {
               console.log('✅ Revenue chart data updated:', revenueData.revenueData);
             }
             
-            if (revenueData.monthlyRevenue && Array.isArray(revenueData.monthlyRevenue)) {
+            if (revenueData.monthlyRevenue && Array.isArray(revenueData.monthlyRevenue) && revenueData.monthlyRevenue.length > 0) {
               console.log('📈 Setting revenue time series data:', revenueData.monthlyRevenue.length, 'items');
               console.log('Sample data:', revenueData.monthlyRevenue[0]);
               setRevenueTimeSeriesData(revenueData.monthlyRevenue);
@@ -271,6 +277,14 @@ export default function SimpleDashboard() {
         console.log('🎉 Dashboard data fetch completed successfully');
       } catch (error) {
         console.error('❌ Failed to fetch dashboard data:', error);
+        
+        // Add activity about the error
+        setActivities(prev => [{
+          action: `Dashboard refresh failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          user: 'System Alert',
+          time: 'Just now',
+          type: 'system'
+        }, ...prev.slice(0, 5)]);
         // Fallback to static data
         setMetrics([
           {
@@ -347,6 +361,7 @@ export default function SimpleDashboard() {
       } finally {
         console.log('🏁 Setting loading to false');
         setLoading(false);
+        setRefreshing(false);
       }
     };
 
@@ -428,6 +443,17 @@ export default function SimpleDashboard() {
                   </button>
                 ))}
               </div>
+              <button 
+                onClick={handleRefreshDashboard}
+                disabled={refreshing}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  refreshing 
+                    ? 'bg-gray-400 text-white cursor-not-allowed' 
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}
+              >
+                {refreshing ? '🔄 Refreshing...' : '🔄 Refresh Data'}
+              </button>
               <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
                 📊 New Report
               </button>
@@ -437,7 +463,16 @@ export default function SimpleDashboard() {
 
         {/* Key Performance Indicators */}
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Key Performance Indicators</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Key Performance Indicators</h2>
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1 text-xs text-gray-500">
+                <div className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`}></div>
+                <span>{loading ? 'Loading...' : 'Live Data'}</span>
+              </div>
+              <span className="text-xs text-gray-400">Auto-refresh: 30s</span>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {metrics.slice(2).map((metric, index) => (
               <Card key={index} className="p-6 bg-white hover:shadow-lg transition-shadow duration-200">
@@ -593,13 +628,18 @@ export default function SimpleDashboard() {
                   <span>Trend</span>
                 </div>
                 <div className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
-                  {revenueTimeSeriesData.length} months
+                  {revenueTimeSeriesData?.length || 0} months
                 </div>
+                {loading && (
+                  <div className="text-xs text-yellow-600 px-2 py-1 bg-yellow-100 rounded">
+                    Loading...
+                  </div>
+                )}
               </div>
             </div>
             
             <div className="relative w-full overflow-hidden">
-              {revenueTimeSeriesData.length > 0 ? (
+              {revenueTimeSeriesData && revenueTimeSeriesData.length > 0 ? (
                 <svg 
                   width="100%" 
                   height="320" 
