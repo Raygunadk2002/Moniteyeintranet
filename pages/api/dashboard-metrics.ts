@@ -1,5 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
+// Import handlers directly for more reliable internal calls
+import pipedriveHandler from './pipedrive';
+import tasksHandler from './tasks';
+import revenueHandler from './revenue-data';
+import holidaysHandler from './team-holidays-metrics';
+
 function calculateTasksChange(openTasks: number, completedTasks: number): string {
   // Calculate a percentage based on task completion ratio
   // If more tasks are completed than open, show positive change
@@ -7,6 +13,40 @@ function calculateTasksChange(openTasks: number, completedTasks: number): string
   const completionRatio = completedTasks / (openTasks + completedTasks);
   const changePercentage = Math.round((completionRatio - 0.5) * 100);
   return `${changePercentage > 0 ? '+' : ''}${changePercentage}%`;
+}
+
+// Helper function to mock request/response for internal API calls
+function createMockRequest(method: string = 'GET'): NextApiRequest {
+  return {
+    method,
+    headers: {},
+    query: {},
+    body: {},
+    cookies: {},
+    url: '',
+    // Add other required properties as needed
+  } as NextApiRequest;
+}
+
+function createMockResponse(): { json: any; status: (code: number) => any; data?: any; statusCode?: number } {
+  let responseData: any = null;
+  let statusCode = 200;
+  
+  return {
+    json: (data: any) => {
+      responseData = data;
+      return { data };
+    },
+    status: (code: number) => ({
+      json: (data: any) => {
+        statusCode = code;
+        responseData = data;
+        return { data, statusCode };
+      }
+    }),
+    get data() { return responseData; },
+    get statusCode() { return statusCode; }
+  };
 }
 
 interface RevenueDataMonth {
@@ -53,119 +93,43 @@ export default async function handler(
   }
 
   try {
-    // Get the base URL for internal API calls
-    const baseUrl = req.headers.host 
-      ? `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`
-      : 'http://localhost:3000';
+    console.log('🔄 Dashboard API: Starting data fetch with direct imports...');
     
-    console.log('Dashboard API using base URL:', baseUrl);
-    
-    // Fetch employee holiday data - enhanced error handling
-    let employeeData: any[] = [];
-    let upcomingHolidays = 0;
-    
-    try {
-      const employeeResponse = await fetch(`${baseUrl}/api/team-holidays-metrics`);
-      
-      if (employeeResponse.ok) {
-        const empData = await employeeResponse.json();
-        
-        // Comprehensive data validation and normalization
-        if (Array.isArray(empData)) {
-          employeeData = empData;
-        } else if (empData && typeof empData === 'object') {
-          // Handle various response formats
-          if (empData.data && Array.isArray(empData.data)) {
-            employeeData = empData.data;
-          } else if (empData.holidays && Array.isArray(empData.holidays)) {
-            employeeData = empData.holidays;
-          } else {
-            // Convert object properties to array
-            const values = Object.values(empData);
-            employeeData = values.filter((item: any) => 
-              item && typeof item === 'object' && item.date
-            );
-          }
-        } else {
-          employeeData = [];
-        }
-        
-        // Ensure employeeData is always an array before filtering
-        if (!Array.isArray(employeeData)) {
-          console.warn('Employee data is not an array, converting to empty array');
-          employeeData = [];
-        }
-        
-        // Count upcoming holidays safely with validation
-        upcomingHolidays = employeeData.filter((holiday: any) => {
-          try {
-            if (!holiday || typeof holiday !== 'object' || !holiday.date) {
-              return false;
-            }
-            
-            const holidayDate = new Date(holiday.date);
-            const today = new Date();
-            
-            // Validate date is valid
-            if (isNaN(holidayDate.getTime())) {
-              return false;
-            }
-            
-            return holidayDate > today;
-          } catch (error) {
-            console.warn('Error processing holiday date:', error);
-            return false;
-          }
-        }).length;
-        
-      } else {
-        console.warn(`Employee holidays API returned ${employeeResponse.status}: ${employeeResponse.statusText}`);
-      }
-    } catch (error) {
-      console.error('Failed to fetch employee holiday data:', error);
-      employeeData = [];
-      upcomingHolidays = 0;
-    }
-
-    // Fetch team holiday metrics with error handling
+    // Fetch team holiday metrics with direct function call
     let teamHolidaysData = { next14Days: 0, next30Days: 0, currentlyOnHoliday: 0, totalUpcoming: 0 };
     
     try {
-      const teamHolidaysResponse = await fetch(`${baseUrl}/api/team-holidays-metrics`);
-      
-      if (teamHolidaysResponse.ok) {
-        const data = await teamHolidaysResponse.json();
-        if (data && typeof data === 'object') {
-          teamHolidaysData = { ...teamHolidaysData, ...data };
-        }
-      } else {
-        console.warn(`Team holidays API returned ${teamHolidaysResponse.status}: ${teamHolidaysResponse.statusText}`);
+      const mockReq = createMockRequest();
+      const mockRes = createMockResponse();
+      await holidaysHandler(mockReq, mockRes as any);
+      const data = mockRes.data;
+      if (data && typeof data === 'object') {
+        teamHolidaysData = { ...teamHolidaysData, ...data };
       }
+      console.log('✅ Holiday data fetched:', teamHolidaysData);
     } catch (error) {
-      console.error('Failed to fetch team holidays data:', error);
+      console.error('❌ Failed to fetch team holidays data:', error);
     }
 
-    // Fetch Pipedrive data with error handling
+    // Fetch Pipedrive data with direct function call
     let pipedriveData = { newDealsCount: 0, newDealsValue: 0, currency: 'GBP' };
     
     try {
-      const pipedriveResponse = await fetch(`${baseUrl}/api/pipedrive`);
-      
-      if (pipedriveResponse.ok) {
-        const data = await pipedriveResponse.json();
-        if (data && typeof data === 'object') {
-          pipedriveData = { ...pipedriveData, ...data };
-          // Ensure currency is GBP for UK business
-          pipedriveData.currency = 'GBP';
-        }
-      } else {
-        console.warn(`Pipedrive API returned ${pipedriveResponse.status}: ${pipedriveResponse.statusText}`);
+      const mockReq = createMockRequest();
+      const mockRes = createMockResponse();
+      await pipedriveHandler(mockReq, mockRes as any);
+      const data = mockRes.data;
+      if (data && typeof data === 'object') {
+        pipedriveData = { ...pipedriveData, ...data };
+        // Ensure currency is GBP for UK business
+        pipedriveData.currency = 'GBP';
       }
+      console.log('✅ Pipedrive data fetched:', pipedriveData);
     } catch (error) {
-      console.error('Failed to fetch Pipedrive data:', error);
+      console.error('❌ Failed to fetch Pipedrive data:', error);
     }
 
-    // Fetch LIVE Tasks data from tasks API with error handling
+    // Fetch LIVE Tasks data with direct function call
     let tasksData = { 
       total: 0, 
       open: 0, 
@@ -180,21 +144,19 @@ export default async function handler(
     };
     
     try {
-      const tasksResponse = await fetch(`${baseUrl}/api/tasks`);
-      
-      if (tasksResponse.ok) {
-        const data = await tasksResponse.json();
-        if (data && typeof data === 'object') {
-          tasksData = { ...tasksData, ...data };
-        }
-      } else {
-        console.warn(`Tasks API returned ${tasksResponse.status}: ${tasksResponse.statusText}`);
+      const mockReq = createMockRequest();
+      const mockRes = createMockResponse();
+      await tasksHandler(mockReq, mockRes as any);
+      const data = mockRes.data;
+      if (data && typeof data === 'object') {
+        tasksData = { ...tasksData, ...data };
       }
+      console.log('✅ Tasks data fetched:', tasksData);
     } catch (error) {
-      console.error('Failed to fetch tasks data:', error);
+      console.error('❌ Failed to fetch tasks data:', error);
     }
 
-    // Fetch revenue data with error handling
+    // Fetch revenue data with direct function call
     let revenueData: RevenueDataResponse = { 
       revenueData: [12, 15, 18, 22, 19, 25],
       monthlyRevenue: [],
@@ -202,18 +164,16 @@ export default async function handler(
     };
     
     try {
-      const revenueResponse = await fetch(`${baseUrl}/api/revenue-data`);
-      
-      if (revenueResponse.ok) {
-        const data = await revenueResponse.json();
-        if (data && typeof data === 'object') {
-          revenueData = { ...revenueData, ...data };
-        }
-      } else {
-        console.warn(`Revenue API returned ${revenueResponse.status}: ${revenueResponse.statusText}`);
+      const mockReq = createMockRequest();
+      const mockRes = createMockResponse();
+      await revenueHandler(mockReq, mockRes as any);
+      const data = mockRes.data;
+      if (data && typeof data === 'object') {
+        revenueData = { ...revenueData, ...data };
       }
+      console.log('✅ Revenue data fetched:', revenueData);
     } catch (error) {
-      console.error('Failed to fetch revenue data:', error);
+      console.error('❌ Failed to fetch revenue data:', error);
     }
 
     // Calculate completion percentage
@@ -378,6 +338,14 @@ export default async function handler(
       return (priority[a.type] || 5) - (priority[b.type] || 5);
     }).slice(0, 6); // Limit to 6 most important activities
 
+    console.log('📊 Final aggregated data:', {
+      newDeals: pipedriveData.newDealsCount,
+      dealsValue: pipedriveData.newDealsValue,
+      openTasks: tasksData.open,
+      threeMonthAverage,
+      twelveMonthTotal
+    });
+
     const dashboardData: DashboardData = {
       metrics: {
         totalRevenue: {
@@ -455,9 +423,10 @@ export default async function handler(
       activities: sortedActivities
     };
 
+    console.log('🎉 Dashboard API: Successfully returning data');
     res.status(200).json(dashboardData);
   } catch (error) {
-    console.error('Dashboard API error:', error);
+    console.error('❌ Dashboard API error:', error);
     res.status(500).json({ error: 'Failed to fetch dashboard data' });
   }
 } 
