@@ -463,7 +463,7 @@ export default function Calendar() {
         }))
       });
 
-      setCalendarEvents(allEvents);
+      setEmployeeCalendarEvents(allEvents);
       setCalendarEventsLoading(false);
       setError(null);
       
@@ -508,135 +508,154 @@ export default function Calendar() {
 
   // Convert holidays, employee holidays, calendar events, and Moniteye events to FullCalendar events
   useEffect(() => {
+    logDebug('useEffect for converting events to calendar events', {
+      holidaysIsArray: Array.isArray(holidays),
+      holidaysLength: holidays?.length,
+      moniteyeEventsIsArray: Array.isArray(moniteyeEvents),
+      moniteyeEventsLength: moniteyeEvents?.length,
+      employeeHolidaysIsArray: Array.isArray(employeeHolidays),
+      employeeHolidaysLength: employeeHolidays?.length,
+      employeeCalendarEventsIsArray: Array.isArray(employeeCalendarEvents),
+      employeeCalendarEventsLength: employeeCalendarEvents?.length
+    });
+
     const events: CalendarEvent[] = [];
 
     // Add public holidays - consistent green color
-    holidays.forEach((holiday) => {
-      events.push({
-        id: `holiday-${holiday.id}`,
-        title: `🎉 ${holiday.name}`,
-        start: holiday.date,
-        backgroundColor: '#16a34a', // Consistent green for all holidays
-        borderColor: '#15803d',
-        textColor: '#ffffff',
-        extendedProps: {
-          type: 'public',
-          description: holiday.name,
-        },
+    if (Array.isArray(holidays)) {
+      holidays.forEach((holiday) => {
+        events.push({
+          id: `holiday-${holiday.id}`,
+          title: `🎉 ${holiday.name}`,
+          start: holiday.date,
+          backgroundColor: '#16a34a', // Consistent green for all holidays
+          borderColor: '#15803d',
+          textColor: '#ffffff',
+          extendedProps: {
+            type: 'public',
+            description: holiday.name,
+          },
+        });
       });
-    });
+    }
 
     // Add Moniteye global events - using distinct colors based on event type
-    moniteyeEvents.forEach((event) => {
-      const getMoniteyeEventStyle = (eventType: string) => {
-        switch (eventType) {
-          case 'company':
-            return { bg: '#1e40af', border: '#1e3a8a' }; // Dark blue
-          case 'meeting':
-            return { bg: '#059669', border: '#047857' }; // Dark green
-          case 'holiday':
-            return { bg: '#dc2626', border: '#b91c1c' }; // Red
-          case 'announcement':
-            return { bg: '#d97706', border: '#b45309' }; // Orange
-          default:
-            return { bg: '#6b7280', border: '#4b5563' }; // Gray
-        }
-      };
+    if (Array.isArray(moniteyeEvents)) {
+      moniteyeEvents.forEach((event) => {
+        const getMoniteyeEventStyle = (eventType: string) => {
+          switch (eventType) {
+            case 'company':
+              return { bg: '#1e40af', border: '#1e3a8a' }; // Dark blue
+            case 'meeting':
+              return { bg: '#059669', border: '#047857' }; // Dark green
+            case 'holiday':
+              return { bg: '#dc2626', border: '#b91c1c' }; // Red
+            case 'announcement':
+              return { bg: '#d97706', border: '#b45309' }; // Orange
+            default:
+              return { bg: '#6b7280', border: '#4b5563' }; // Gray
+          }
+        };
 
-      const style = getMoniteyeEventStyle(event.event_type);
-      const icon = event.event_type === 'company' ? '🏢' :
-                   event.event_type === 'meeting' ? '🤝' :
-                   event.event_type === 'holiday' ? '🎉' :
-                   event.event_type === 'announcement' ? '📢' : '📅';
-
-      events.push({
-        id: `moniteye-${event.id}`,
-        title: `${icon} ${event.title}`,
-        start: event.start_date,
-        end: event.all_day ? undefined : event.end_date,
-        backgroundColor: style.bg,
-        borderColor: style.border,
-        textColor: '#ffffff',
-        extendedProps: {
-          type: 'meeting',
-          description: event.description,
-          location: event.location,
-          eventType: event.event_type,
-          moniteyeEvent: true,
-          moniteyeEventData: event,
-        },
-      });
-    });
-
-    // Add employee holidays (time off) - using employee-specific colors
-    employeeHolidays.forEach((holiday) => {
-      if (holiday.approved) {
-        const employeeColor = getEmployeeColor(holiday.employeeName);
-        
-        // Slightly modify color based on holiday type
-        let backgroundColor = employeeColor.bg;
-        let borderColor = employeeColor.border;
-        
-        if (holiday.type === 'Sick Leave') {
-          backgroundColor = '#ef4444'; // Red for sick leave
-          borderColor = '#dc2626';
-        }
+        const style = getMoniteyeEventStyle(event.event_type);
+        const icon = event.event_type === 'company' ? '🏢' :
+                     event.event_type === 'meeting' ? '🤝' :
+                     event.event_type === 'holiday' ? '🎉' :
+                     event.event_type === 'announcement' ? '📢' : '📅';
 
         events.push({
-          id: `employee-holiday-${holiday.id}`,
-          title: `🏖️ ${holiday.employeeName} - ${holiday.type}`,
-          start: holiday.startDate,
-          end: holiday.duration > 1 ? holiday.endDate : undefined,
+          id: `moniteye-${event.id}`,
+          title: `${icon} ${event.title}`,
+          start: event.start_date,
+          end: event.all_day ? undefined : event.end_date,
+          backgroundColor: style.bg,
+          borderColor: style.border,
+          textColor: '#ffffff',
+          extendedProps: {
+            type: 'meeting',
+            description: event.description,
+            location: event.location,
+            eventType: event.event_type,
+            moniteyeEvent: true,
+            moniteyeEventData: event,
+          },
+        });
+      });
+    }
+
+    // Add employee holidays (time off) - using employee-specific colors
+    if (Array.isArray(employeeHolidays)) {
+      employeeHolidays.forEach((holiday) => {
+        if (holiday.approved) {
+          const employeeColor = getEmployeeColor(holiday.employeeName);
+          
+          // Slightly modify color based on holiday type
+          let backgroundColor = employeeColor.bg;
+          let borderColor = employeeColor.border;
+          
+          if (holiday.type === 'Sick Leave') {
+            backgroundColor = '#ef4444'; // Red for sick leave
+            borderColor = '#dc2626';
+          }
+
+          events.push({
+            id: `employee-holiday-${holiday.id}`,
+            title: `🏖️ ${holiday.employeeName} - ${holiday.type}`,
+            start: holiday.startDate,
+            end: holiday.duration > 1 ? holiday.endDate : undefined,
+            backgroundColor,
+            borderColor,
+            textColor: '#ffffff',
+            extendedProps: {
+              type: 'employee',
+              employeeName: holiday.employeeName,
+              description: `${holiday.type}${holiday.reason ? ` - ${holiday.reason}` : ''}`,
+              duration: holiday.duration,
+              reason: holiday.reason,
+            },
+          });
+        }
+      });
+    }
+
+    // Add employee calendar events (meetings, appointments, etc.) - using employee-specific colors
+    if (Array.isArray(employeeCalendarEvents)) {
+      employeeCalendarEvents.forEach((event) => {
+        const employeeColor = getEmployeeColor(event.employeeName);
+        
+        // Use employee-specific colors instead of calendar type colors
+        const backgroundColor = employeeColor.bg;
+        const borderColor = employeeColor.border;
+
+        const icon = event.visibility === 'private' ? '🔒' : 
+                     event.isAllDay ? '📅' : '⏰';
+
+        events.push({
+          id: `calendar-event-${event.id}`,
+          title: `${icon} ${event.title}`,
+          start: event.startDateTime,
+          end: event.isAllDay ? undefined : event.endDateTime,
           backgroundColor,
           borderColor,
           textColor: '#ffffff',
           extendedProps: {
-            type: 'employee',
-            employeeName: holiday.employeeName,
-            description: `${holiday.type}${holiday.reason ? ` - ${holiday.reason}` : ''}`,
-            duration: holiday.duration,
-            reason: holiday.reason,
+            type: event.visibility === 'private' ? 'appointment' : 'meeting',
+            employeeName: event.employeeName,
+            description: event.description,
+            location: event.location,
+            calendarType: event.calendarType,
+            attendees: event.attendees,
           },
         });
-      }
-    });
-
-    // Add employee calendar events (meetings, appointments, etc.) - using employee-specific colors
-    employeeCalendarEvents.forEach((event) => {
-      const employeeColor = getEmployeeColor(event.employeeName);
-      
-      // Use employee-specific colors instead of calendar type colors
-      const backgroundColor = employeeColor.bg;
-      const borderColor = employeeColor.border;
-
-      const icon = event.visibility === 'private' ? '🔒' : 
-                   event.isAllDay ? '📅' : '⏰';
-
-      events.push({
-        id: `calendar-event-${event.id}`,
-        title: `${icon} ${event.title}`,
-        start: event.startDateTime,
-        end: event.isAllDay ? undefined : event.endDateTime,
-        backgroundColor,
-        borderColor,
-        textColor: '#ffffff',
-        extendedProps: {
-          type: event.visibility === 'private' ? 'appointment' : 'meeting',
-          employeeName: event.employeeName,
-          description: event.description,
-          location: event.location,
-          calendarType: event.calendarType,
-          attendees: event.attendees,
-        },
       });
-    });
+    }
 
     setCalendarEvents(events);
   }, [holidays, employeeHolidays, employeeCalendarEvents, moniteyeEvents]);
 
   // Helper function to get upcoming holidays
   const getUpcomingHolidays = () => {
-    if (!currentDate) return [];
+    if (!currentDate || !Array.isArray(holidays)) return [];
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -655,7 +674,7 @@ export default function Calendar() {
 
   // Helper function to get upcoming employee holidays
   const getUpcomingEmployeeHolidays = () => {
-    if (!currentDate) return [];
+    if (!currentDate || !Array.isArray(employeeHolidays)) return [];
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -674,7 +693,7 @@ export default function Calendar() {
 
   // Helper function to get upcoming calendar events
   const getUpcomingCalendarEvents = () => {
-    if (!currentDate) return [];
+    if (!currentDate || !Array.isArray(employeeCalendarEvents)) return [];
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
