@@ -105,6 +105,7 @@ export default function Calendar() {
   
   // Initialize date only on client-side to avoid hydration mismatch
   useEffect(() => {
+    console.log('📅 Initializing calendar with current date');
     setCurrentDate(new Date());
   }, []);
 
@@ -351,7 +352,10 @@ export default function Calendar() {
 
   // Memoized function to fetch calendar events - prevents unnecessary re-renders
   const fetchCalendarEvents = useCallback(async () => {
-    if (selectedEmployees.length === 0) {
+    // Use current selectedEmployees from closure to avoid dependency issues
+    const currentSelectedEmployees = selectedEmployees;
+    
+    if (currentSelectedEmployees.length === 0) {
       console.log('📝 No employees selected, skipping calendar events fetch');
       setCalendarEventsLoading(false);
       setEmployeeCalendarEvents([]);
@@ -360,7 +364,7 @@ export default function Calendar() {
 
     try {
       setCalendarEventsLoading(true);
-      console.log('🔄 Fetching calendar events for:', selectedEmployees);
+      console.log('🔄 Fetching calendar events for:', currentSelectedEmployees);
       
       // Get active employees first to determine which ones have OAuth tokens
       const subscriptionsResponse = await fetch('/api/employee-calendar-subscriptions', {
@@ -376,7 +380,7 @@ export default function Calendar() {
       
       const subscriptionsData = await subscriptionsResponse.json();
       const activeEmployees = subscriptionsData.calendars
-        .filter((cal: EmployeeCalendar) => cal.isActive && selectedEmployees.includes(cal.employeeId))
+        .filter((cal: EmployeeCalendar) => cal.isActive && currentSelectedEmployees.includes(cal.employeeId))
         .map((cal: EmployeeCalendar) => cal.employeeId);
       
       console.log('👥 Active employees with OAuth tokens:', activeEmployees);
@@ -415,7 +419,7 @@ export default function Calendar() {
       console.log('✅ Calendar events loaded:', {
         totalEvents: allEvents.length,
         activeEmployees,
-        selectedEmployees,
+        selectedEmployees: currentSelectedEmployees,
         eventsByEmployee: activeEmployees.map((empId: string) => ({
           employeeId: empId,
           events: allEvents.filter(event => event.employeeId === empId).length
@@ -434,7 +438,7 @@ export default function Calendar() {
     } finally {
       setCalendarEventsLoading(false);
     }
-  }, [selectedEmployees]);
+  }, []); // Remove selectedEmployees from dependency array to prevent infinite loops
 
   // Define consistent color scheme for employees
   const getEmployeeColor = (employeeName: string) => {
@@ -733,22 +737,24 @@ export default function Calendar() {
     }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);
-  }, [autoRefreshEnabled, selectedEmployees, fetchCalendarEvents]);
+  }, [autoRefreshEnabled, fetchCalendarEvents]);
 
-  // Fetch employee calendar events when component is ready
+  // Fetch employee calendar events when component is ready or selectedEmployees changes
   useEffect(() => {
     // Only fetch if we have selected employees and employee loading is complete
     if (!employeeLoading && selectedEmployees.length > 0) {
+      console.log('📅 Fetching calendar events due to employee change');
       fetchCalendarEvents();
     }
-  }, [fetchCalendarEvents, employeeLoading, selectedEmployees.length]);
+  }, [employeeLoading, selectedEmployees.length, fetchCalendarEvents]);
 
   // Refetch when showPrivateEvents changes
   useEffect(() => {
     if (!employeeLoading && selectedEmployees.length > 0) {
+      console.log('📅 Fetching calendar events due to privacy setting change');
       fetchCalendarEvents();
     }
-  }, [showPrivateEvents, fetchCalendarEvents, employeeLoading, selectedEmployees.length]);
+  }, [showPrivateEvents, employeeLoading, fetchCalendarEvents]);
 
   // Trigger calendar events refresh when lastRefresh changes
   useEffect(() => {
@@ -756,7 +762,7 @@ export default function Calendar() {
       console.log('🔄 Triggering refresh from lastRefresh change');
       fetchCalendarEvents();
     }
-  }, [lastRefresh, fetchCalendarEvents, selectedEmployees.length]);
+  }, [lastRefresh, fetchCalendarEvents]);
 
   // Log component mounting and state changes for debugging
   useEffect(() => {
@@ -771,13 +777,25 @@ export default function Calendar() {
   }, [currentDate, employeeLoading, calendarEventsLoading, selectedEmployees.length, employeeCalendarEvents.length, calendarEvents.length]);
 
   // Show loading state if date hasn't been initialized yet
+  // Add fallback initialization for currentDate as backup
+  const safeCurrentDate = currentDate || new Date();
+  
   if (!currentDate) {
+    // Try to initialize currentDate if it's still null after a short delay
+    setTimeout(() => {
+      if (!currentDate) {
+        console.log('⚠️ Fallback: Force setting currentDate');
+        setCurrentDate(new Date());
+      }
+    }, 100);
+    
     return (
       <Layout>
         <div className="flex-1 bg-gray-50 p-6 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <p>Loading calendar...</p>
+            <p className="text-sm text-gray-500 mt-2">Initializing calendar component...</p>
           </div>
         </div>
       </Layout>
