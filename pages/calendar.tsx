@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -112,26 +112,30 @@ export default function Calendar() {
   const handleSyncCalendars = async () => {
     try {
       setCalendarEventsLoading(true);
+      setAlertMessage({ type: 'info', message: 'Syncing calendar data...' });
       
-      // Refresh employee calendars
+      // Refresh employee calendars first
       const calendarsResponse = await fetch('/api/employee-calendar-subscriptions');
       if (calendarsResponse.ok) {
         const calendarsData = await calendarsResponse.json();
         setEmployeeCalendars(calendarsData.calendars || []);
+        
+        // Update selected employees to include any newly active ones
+        const activeEmployees = calendarsData.calendars
+          .filter((cal: EmployeeCalendar) => cal.isActive)
+          .map((cal: EmployeeCalendar) => cal.employeeId);
+        setSelectedEmployees(activeEmployees);
+        
+        console.log('🔄 Updated employee selection after sync:', activeEmployees);
       }
-
-      // Refresh calendar events from Google Calendar API
-      const eventsResponse = await fetch('/api/google-calendar-events');
-      if (eventsResponse.ok) {
-        const eventsData = await eventsResponse.json();
-        setEmployeeCalendarEvents(eventsData.events || []);
-      }
-
-      setLastRefresh(new Date());
+      
+      // Use the new fetchCalendarEvents function
+      await fetchCalendarEvents();
+      
+      setAlertMessage({ type: 'success', message: 'Calendar data synced successfully!' });
     } catch (error) {
-      console.error('Failed to sync calendars:', error);
-    } finally {
-      setCalendarEventsLoading(false);
+      console.error('❌ Failed to sync calendars:', error);
+      setAlertMessage({ type: 'error', message: 'Failed to sync calendar data. Please try again.' });
     }
   };
 
@@ -252,12 +256,13 @@ export default function Calendar() {
     }
   }, []);
 
-  // Auto-dismiss alert messages after 10 seconds
+  // Auto-clear alert messages after 5 seconds
   useEffect(() => {
     if (alertMessage) {
       const timer = setTimeout(() => {
         setAlertMessage(null);
-      }, 10000);
+      }, 5000);
+
       return () => clearTimeout(timer);
     }
   }, [alertMessage]);
@@ -327,51 +332,109 @@ export default function Calendar() {
           .filter((cal: EmployeeCalendar) => cal.isActive)
           .map((cal: EmployeeCalendar) => cal.employeeId);
         setSelectedEmployees(activeEmployees);
+        
+        console.log('✅ Employee calendars loaded:', {
+          total: data.calendars.length,
+          active: activeEmployees.length,
+          activeEmployees
+        });
       } catch (error) {
         console.error('Failed to fetch employee calendars:', error);
         setEmployeeCalendars([]);
+      } finally {
+        setEmployeeLoading(false);
       }
     };
 
     fetchEmployeeCalendars();
   }, []);
 
-  // Fetch employee calendar events
-  useEffect(() => {
-    const fetchEmployeeCalendarEvents = async () => {
-      try {
-        const queryParams = new URLSearchParams({
-          includePrivate: showPrivateEvents.toString()
-        });
+  // Memoized function to fetch calendar events - prevents unnecessary re-renders
+  const fetchCalendarEvents = useCallback(async () => {
+    if (selectedEmployees.length === 0) {
+      console.log('📝 No employees selected, skipping calendar events fetch');
+      setCalendarEventsLoading(false);
+      setEmployeeCalendarEvents([]);
+      return;
+    }
 
-        if (selectedEmployees.length > 0) {
-          selectedEmployees.forEach(empId => {
-            queryParams.append('employeeId', empId);
-          });
+    try {
+      setCalendarEventsLoading(true);
+      console.log('🔄 Fetching calendar events for:', selectedEmployees);
+      
+      // Get active employees first to determine which ones have OAuth tokens
+      const subscriptionsResponse = await fetch('/api/employee-calendar-subscriptions', {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         }
-
-        const response = await fetch(`/api/simple-calendar-integration?${queryParams}`);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        setEmployeeCalendarEvents(data.events || []);
-      } catch (error) {
-        console.error('Failed to fetch employee calendar events:', error);
-        setEmployeeCalendarEvents([]);
-      } finally {
-        setCalendarEventsLoading(false);
+      });
+      
+      if (!subscriptionsResponse.ok) {
+        throw new Error(`Failed to fetch employee subscriptions: ${subscriptionsResponse.status}`);
       }
-    };
-
-    if (selectedEmployees.length > 0) {
-      fetchEmployeeCalendarEvents();
-    } else {
+      
+      const subscriptionsData = await subscriptionsResponse.json();
+      const activeEmployees = subscriptionsData.calendars
+        .filter((cal: EmployeeCalendar) => cal.isActive && selectedEmployees.includes(cal.employeeId))
+        .map((cal: EmployeeCalendar) => cal.employeeId);
+      
+      console.log('👥 Active employees with OAuth tokens:', activeEmployees);
+      
+      // Fetch events for each active employee individually
+      const allEvents: EmployeeCalendarEvent[] = [];
+      
+      for (const employeeId of activeEmployees) {
+        try {
+          console.log(`🔄 Fetching events for ${employeeId}...`);
+          const response = await fetch(`/api/simple-calendar-integration?employeeId=${employeeId}`, {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.events && data.events.length > 0) {
+              allEvents.push(...data.events);
+              console.log(`✅ Loaded ${data.events.length} events for ${employeeId}`);
+            } else {
+              console.log(`📝 No events found for ${employeeId}`);
+            }
+          } else {
+            console.warn(`⚠️ Failed to fetch events for ${employeeId}: ${response.status}`);
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error fetching events for ${employeeId}:`, error);
+        }
+      }
+      
+      setEmployeeCalendarEvents(allEvents);
+      
+      console.log('✅ Calendar events loaded:', {
+        totalEvents: allEvents.length,
+        activeEmployees,
+        selectedEmployees,
+        eventsByEmployee: activeEmployees.map((empId: string) => ({
+          employeeId: empId,
+          events: allEvents.filter(event => event.employeeId === empId).length
+        }))
+      });
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch employee calendar events:', error);
+      setEmployeeCalendarEvents([]);
+      
+      // Show user-friendly error message
+      setAlertMessage({ 
+        type: 'error', 
+        message: 'Failed to load calendar events. Please try refreshing the page.' 
+      });
+    } finally {
       setCalendarEventsLoading(false);
     }
-  }, [selectedEmployees, showPrivateEvents]);
+  }, [selectedEmployees]);
 
   // Define consistent color scheme for employees
   const getEmployeeColor = (employeeName: string) => {
@@ -658,16 +721,54 @@ export default function Calendar() {
     }
   };
 
-  // Auto-refresh functionality
+  // Auto-refresh calendar events periodically (every 5 minutes)
   useEffect(() => {
     if (!autoRefreshEnabled) return;
-
+    
     const interval = setInterval(() => {
-      handleSyncCalendars();
-    }, 30000); // Refresh every 30 seconds
+      if (selectedEmployees.length > 0) {
+        console.log('🔄 Auto-refreshing calendar events...');
+        fetchCalendarEvents();
+      }
+    }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);
-  }, [autoRefreshEnabled, selectedEmployees, showPrivateEvents]);
+  }, [autoRefreshEnabled, selectedEmployees, fetchCalendarEvents]);
+
+  // Fetch employee calendar events when component is ready
+  useEffect(() => {
+    // Only fetch if we have selected employees and employee loading is complete
+    if (!employeeLoading && selectedEmployees.length > 0) {
+      fetchCalendarEvents();
+    }
+  }, [fetchCalendarEvents, employeeLoading, selectedEmployees.length]);
+
+  // Refetch when showPrivateEvents changes
+  useEffect(() => {
+    if (!employeeLoading && selectedEmployees.length > 0) {
+      fetchCalendarEvents();
+    }
+  }, [showPrivateEvents, fetchCalendarEvents, employeeLoading, selectedEmployees.length]);
+
+  // Trigger calendar events refresh when lastRefresh changes
+  useEffect(() => {
+    if (lastRefresh && selectedEmployees.length > 0) {
+      console.log('🔄 Triggering refresh from lastRefresh change');
+      fetchCalendarEvents();
+    }
+  }, [lastRefresh, fetchCalendarEvents, selectedEmployees.length]);
+
+  // Log component mounting and state changes for debugging
+  useEffect(() => {
+    console.log('📅 Calendar component mounted/updated:', {
+      currentDate: !!currentDate,
+      employeeLoading,
+      calendarEventsLoading,
+      selectedEmployees: selectedEmployees.length,
+      employeeCalendarEvents: employeeCalendarEvents.length,
+      calendarEvents: calendarEvents.length
+    });
+  }, [currentDate, employeeLoading, calendarEventsLoading, selectedEmployees.length, employeeCalendarEvents.length, calendarEvents.length]);
 
   // Show loading state if date hasn't been initialized yet
   if (!currentDate) {
