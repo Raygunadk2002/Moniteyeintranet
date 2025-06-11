@@ -32,15 +32,24 @@ setInterval(() => {
   console.log(`🧹 Cleaned ${cleaned} expired authorization codes from cache, ${usedAuthCodes.size} remaining`);
 }, 5 * 60 * 1000);
 
-// Dynamic redirect URI that handles different ports in development
+// Dynamic redirect URI that handles different environments
 function getRedirectUri(req: NextApiRequest): string {
   if (process.env.GOOGLE_REDIRECT_URI) {
     return process.env.GOOGLE_REDIRECT_URI;
   }
   
-  // In development, dynamically construct the redirect URI based on the request
-  const protocol = req.headers['x-forwarded-proto'] || 'http';
-  const host = req.headers.host || 'localhost:3000';
+  // Auto-detect protocol and host based on environment
+  let protocol = 'http';
+  let host = req.headers.host || 'localhost:3000';
+  
+  // Check for Vercel deployment or other production indicators
+  if (req.headers['x-forwarded-proto']) {
+    protocol = req.headers['x-forwarded-proto'] as string;
+  } else if (req.headers['x-forwarded-ssl'] === 'on') {
+    protocol = 'https';
+  } else if (host.includes('vercel.app') || host.includes('.app') || host.includes('.com')) {
+    protocol = 'https';
+  }
   
   return `${protocol}://${host}/api/google-calendar-callback`;
 }
@@ -206,25 +215,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   usedAuthCodes.set(codeKey, { timestamp: Date.now(), attempts });
 
   // Enhanced Google OAuth configuration - explicitly disable PKCE
+  const redirectUri = getRedirectUri(req);
   const oauth2Client = new google.auth.OAuth2({
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri: `http://${req.headers.host}/api/google-calendar-callback`
+    redirectUri: redirectUri
   });
 
   const configInfo = {
     clientId: process.env.GOOGLE_CLIENT_ID?.substring(0, 20) + '...',
     hasSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri: `http://${req.headers.host}/api/google-calendar-callback`,
+    redirectUri: redirectUri,
     requestHost: req.headers.host,
-    expectedHost: 'localhost:3000'
+    protocol: req.headers['x-forwarded-proto'] || 'http'
   };
   
   console.log(`🔧 [${requestId}] OAuth configuration:`, configInfo);
-  
-  if (req.headers.host !== 'localhost:3000') {
-    console.log(`⚠️ [${requestId}] HOST MISMATCH - expected localhost:3000, got ${req.headers.host}`);
-  }
 
   try {
     console.log(`🔄 [${requestId}] Attempting token exchange with Google...`);
@@ -236,7 +242,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       code: codeStr,
       client_id: process.env.GOOGLE_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: `http://${req.headers.host}/api/google-calendar-callback`,
+      redirect_uri: redirectUri,
       grant_type: 'authorization_code'
       // Explicitly NOT including any PKCE parameters like code_verifier
     });
@@ -246,7 +252,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       hasCode: !!codeStr,
       hasClientId: !!process.env.GOOGLE_CLIENT_ID,
       hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-      redirectUri: `http://${req.headers.host}/api/google-calendar-callback`,
+      redirectUri: redirectUri,
       grantType: 'authorization_code'
     });
 

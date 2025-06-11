@@ -1,15 +1,24 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 
-// Dynamic redirect URI that handles different ports in development
+// Dynamic redirect URI that handles different environments
 function getRedirectUri(req: NextApiRequest): string {
   if (process.env.GOOGLE_REDIRECT_URI) {
     return process.env.GOOGLE_REDIRECT_URI;
   }
   
-  // In development, dynamically construct the redirect URI based on the request
-  const protocol = req.headers['x-forwarded-proto'] || 'http';
-  const host = req.headers.host || 'localhost:3000';
+  // Auto-detect protocol and host based on environment
+  let protocol = 'http';
+  let host = req.headers.host || 'localhost:3000';
+  
+  // Check for Vercel deployment or other production indicators
+  if (req.headers['x-forwarded-proto']) {
+    protocol = req.headers['x-forwarded-proto'] as string;
+  } else if (req.headers['x-forwarded-ssl'] === 'on') {
+    protocol = 'https';
+  } else if (host.includes('vercel.app') || host.includes('.app') || host.includes('.com')) {
+    protocol = 'https';
+  }
   
   return `${protocol}://${host}/api/google-calendar-callback`;
 }
