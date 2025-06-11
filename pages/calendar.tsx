@@ -151,9 +151,22 @@ export default function Calendar() {
         setEmployeeCalendars(calendarsData.calendars || []);
         
         // Update selected employees to include any newly active ones
+        console.log('🔄 Sync - Processing calendar data:', {
+          rawCalendars: calendarsData.calendars,
+          calendarCount: calendarsData.calendars?.length || 0
+        });
+        
         const activeEmployees = calendarsData.calendars
-          .filter((cal: EmployeeCalendar) => cal.isActive)
+          .filter((cal: EmployeeCalendar) => {
+            console.log(`🔄 Sync - Checking employee ${cal.employeeId}:`, { 
+              isActive: cal.isActive, 
+              employeeName: cal.employeeName 
+            });
+            return cal.isActive;
+          })
           .map((cal: EmployeeCalendar) => cal.employeeId);
+        
+        console.log('🔄 Sync - Setting selected employees:', activeEmployees);
         setSelectedEmployees(activeEmployees);
         
         console.log('🔄 Updated employee selection after sync:', activeEmployees);
@@ -358,9 +371,22 @@ export default function Calendar() {
         setEmployeeCalendars(data.calendars || []);
         
         // Auto-select all active employees
+        console.log('📋 Processing employee calendar data:', {
+          rawCalendars: data.calendars,
+          calendarCount: data.calendars?.length || 0
+        });
+        
         const activeEmployees = data.calendars
-          .filter((cal: EmployeeCalendar) => cal.isActive)
+          .filter((cal: EmployeeCalendar) => {
+            console.log(`🔍 Checking employee ${cal.employeeId}:`, { 
+              isActive: cal.isActive, 
+              employeeName: cal.employeeName 
+            });
+            return cal.isActive;
+          })
           .map((cal: EmployeeCalendar) => cal.employeeId);
+        
+        console.log('🎯 Setting selected employees:', activeEmployees);
         setSelectedEmployees(activeEmployees);
         
         console.log('✅ Employee calendars loaded:', {
@@ -440,6 +466,18 @@ export default function Calendar() {
       setCalendarEventsLoading(false);
     }
   }, [selectedEmployees]);
+
+  // Trigger calendar events fetch when selected employees change
+  useEffect(() => {
+    if (selectedEmployees.length > 0) {
+      logDebug('🚀 Triggering calendar events fetch due to selectedEmployees change:', selectedEmployees);
+      fetchCalendarEvents();
+    } else {
+      logDebug('📝 No employees selected, skipping calendar events fetch');
+      setEmployeeCalendarEvents([]);
+      setCalendarEventsLoading(false);
+    }
+  }, [selectedEmployees, fetchCalendarEvents]);
 
   // Define consistent color scheme for employees
   const getEmployeeColor = (employeeName: string) => {
