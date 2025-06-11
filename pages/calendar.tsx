@@ -6,6 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import Layout from "../components/Layout";
 import MoniteyeEventModal from '../components/MoniteyeEventModal';
 import { MoniteyeEvent } from './api/moniteye-events';
+// Force deployment refresh - ensure latest fixes are deployed
 
 interface Holiday {
   id: number;
