@@ -109,6 +109,18 @@ export default function Calendar() {
     setCurrentDate(new Date());
   }, []);
 
+  // Additional fallback - force initialization if currentDate is still null after mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!currentDate) {
+        console.log('⚠️ Fallback: Force setting currentDate after delay');
+        setCurrentDate(new Date());
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [currentDate]);
+
   // Define sync function early so it can be used in effects
   const handleSyncCalendars = async () => {
     try {
@@ -777,18 +789,7 @@ export default function Calendar() {
   }, [currentDate, employeeLoading, calendarEventsLoading, selectedEmployees.length, employeeCalendarEvents.length, calendarEvents.length]);
 
   // Show loading state if date hasn't been initialized yet
-  // Add fallback initialization for currentDate as backup
-  const safeCurrentDate = currentDate || new Date();
-  
   if (!currentDate) {
-    // Try to initialize currentDate if it's still null after a short delay
-    setTimeout(() => {
-      if (!currentDate) {
-        console.log('⚠️ Fallback: Force setting currentDate');
-        setCurrentDate(new Date());
-      }
-    }, 100);
-    
     return (
       <Layout>
         <div className="flex-1 bg-gray-50 p-6 flex items-center justify-center">
