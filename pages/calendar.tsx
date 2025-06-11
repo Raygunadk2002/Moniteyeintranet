@@ -364,10 +364,7 @@ export default function Calendar() {
 
   // Memoized function to fetch calendar events - prevents unnecessary re-renders
   const fetchCalendarEvents = useCallback(async () => {
-    // Use current selectedEmployees from closure to avoid dependency issues
-    const currentSelectedEmployees = selectedEmployees;
-    
-    if (currentSelectedEmployees.length === 0) {
+    if (selectedEmployees.length === 0) {
       console.log('📝 No employees selected, skipping calendar events fetch');
       setCalendarEventsLoading(false);
       setEmployeeCalendarEvents([]);
@@ -376,7 +373,7 @@ export default function Calendar() {
 
     try {
       setCalendarEventsLoading(true);
-      console.log('🔄 Fetching calendar events for:', currentSelectedEmployees);
+      console.log('🔄 Fetching calendar events for:', selectedEmployees);
       
       // Get active employees first to determine which ones have OAuth tokens
       const subscriptionsResponse = await fetch('/api/employee-calendar-subscriptions', {
@@ -392,7 +389,7 @@ export default function Calendar() {
       
       const subscriptionsData = await subscriptionsResponse.json();
       const activeEmployees = subscriptionsData.calendars
-        .filter((cal: EmployeeCalendar) => cal.isActive && currentSelectedEmployees.includes(cal.employeeId))
+        .filter((cal: EmployeeCalendar) => cal.isActive && selectedEmployees.includes(cal.employeeId))
         .map((cal: EmployeeCalendar) => cal.employeeId);
       
       console.log('👥 Active employees with OAuth tokens:', activeEmployees);
@@ -431,7 +428,7 @@ export default function Calendar() {
       console.log('✅ Calendar events loaded:', {
         totalEvents: allEvents.length,
         activeEmployees,
-        selectedEmployees: currentSelectedEmployees,
+        selectedEmployees: selectedEmployees,
         eventsByEmployee: activeEmployees.map((empId: string) => ({
           employeeId: empId,
           events: allEvents.filter(event => event.employeeId === empId).length
@@ -450,7 +447,7 @@ export default function Calendar() {
     } finally {
       setCalendarEventsLoading(false);
     }
-  }, []); // Remove selectedEmployees from dependency array to prevent infinite loops
+  }, [selectedEmployees]); // Include selectedEmployees dependency
 
   // Define consistent color scheme for employees
   const getEmployeeColor = (employeeName: string) => {
