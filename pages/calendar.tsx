@@ -746,7 +746,7 @@ export default function Calendar() {
     }, 5 * 60 * 1000); // 5 minutes
 
     return () => clearInterval(interval);
-  }, [autoRefreshEnabled, fetchCalendarEvents]);
+  }, [autoRefreshEnabled]); // Remove fetchCalendarEvents from deps to prevent loop
 
   // Fetch employee calendar events when component is ready or selectedEmployees changes
   useEffect(() => {
@@ -755,7 +755,7 @@ export default function Calendar() {
       console.log('📅 Fetching calendar events due to employee change');
       fetchCalendarEvents();
     }
-  }, [employeeLoading, selectedEmployees.length, fetchCalendarEvents]);
+  }, [employeeLoading, selectedEmployees.length]); // Remove fetchCalendarEvents from deps to prevent loop
 
   // Refetch when showPrivateEvents changes
   useEffect(() => {
@@ -763,7 +763,7 @@ export default function Calendar() {
       console.log('📅 Fetching calendar events due to privacy setting change');
       fetchCalendarEvents();
     }
-  }, [showPrivateEvents, employeeLoading, fetchCalendarEvents]);
+  }, [showPrivateEvents, employeeLoading]); // Remove fetchCalendarEvents from deps to prevent loop
 
   // Trigger calendar events refresh when lastRefresh changes
   useEffect(() => {
@@ -771,7 +771,7 @@ export default function Calendar() {
       console.log('🔄 Triggering refresh from lastRefresh change');
       fetchCalendarEvents();
     }
-  }, [lastRefresh, fetchCalendarEvents]);
+  }, [lastRefresh]); // Remove fetchCalendarEvents from deps to prevent loop
 
   // Log component mounting and state changes for debugging
   useEffect(() => {
