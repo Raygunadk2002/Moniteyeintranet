@@ -93,13 +93,13 @@ const fetchGoogleCalendarEvents = async (
     const events = response.data.items || [];
     
     return events.map((event): CalendarEvent => ({
-      id: event.id || 'unknown',
-      title: event.summary || 'No Title',
-      start: event.start?.dateTime || event.start?.date || '',
-      end: event.end?.dateTime || event.end?.date || '',
-      description: event.description,
-      location: event.location,
-      attendees: event.attendees?.map(attendee => attendee.email || '') || [],
+      id: event.id ?? 'unknown',
+      title: event.summary ?? 'No Title',
+      start: event.start?.dateTime ?? event.start?.date ?? '',
+      end: event.end?.dateTime ?? event.end?.date ?? '',
+      description: event.description ?? undefined,
+      location: event.location ?? undefined,
+      attendees: event.attendees?.map(attendee => attendee.email ?? '').filter(Boolean) || [],
       calendarType: 'google',
       employeeEmail: employeeTokens.email,
       employeeName: employeeTokens.name,
