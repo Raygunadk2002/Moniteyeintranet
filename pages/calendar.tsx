@@ -365,6 +365,7 @@ export default function Calendar() {
   useEffect(() => {
     const fetchEmployeeCalendars = async () => {
       try {
+        logDebug('🚀 Starting fetchEmployeeCalendars');
         const response = await fetch('/api/employee-calendar-subscriptions');
         
         if (!response.ok) {
@@ -372,6 +373,11 @@ export default function Calendar() {
         }
         
         const data = await response.json();
+        logDebug('📡 API Response received:', {
+          calendarsLength: data.calendars?.length,
+          rawData: data.calendars
+        });
+        
         setEmployeeCalendars(data.calendars || []);
         
         // Auto-select all active employees
@@ -394,8 +400,9 @@ export default function Calendar() {
           })
           .map((cal: EmployeeCalendar) => cal.employeeId);
         
-        console.log('🎯 Setting selected employees:', activeEmployees);
+        logDebug('🎯 About to set selected employees:', activeEmployees);
         setSelectedEmployees(activeEmployees);
+        logDebug('✅ Selected employees set. Current value should be:', activeEmployees);
         
         console.log('✅ Employee calendars loaded:', {
           total: data.calendars.length,
@@ -403,6 +410,7 @@ export default function Calendar() {
           activeEmployees
         });
       } catch (error) {
+        logDebug('❌ Error in fetchEmployeeCalendars:', error);
         console.error('Failed to fetch employee calendars:', error);
         setEmployeeCalendars([]);
       } finally {
@@ -486,6 +494,15 @@ export default function Calendar() {
       setCalendarEventsLoading(false);
     }
   }, [selectedEmployees, fetchCalendarEvents]);
+
+  // Debug: Track selectedEmployees state changes
+  useEffect(() => {
+    logDebug('🔄 selectedEmployees state changed:', {
+      length: selectedEmployees.length,
+      employees: selectedEmployees,
+      timestamp: new Date().toISOString()
+    });
+  }, [selectedEmployees]);
 
   // Define consistent color scheme for employees
   const getEmployeeColor = (employeeName: string) => {
