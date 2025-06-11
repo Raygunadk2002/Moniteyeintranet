@@ -81,7 +81,15 @@ interface CalendarEvent {
   };
 }
 
+// Enhanced logging utility for production debugging
+const logDebug = (message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[CALENDAR-DEBUG ${timestamp}] ${message}`, data || '');
+};
+
 export default function Calendar() {
+  logDebug('Calendar component initializing');
+
   const [currentDate, setCurrentDate] = useState<Date | null>(new Date());
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [employeeHolidays, setEmployeeHolidays] = useState<EmployeeHoliday[]>([]);
@@ -97,6 +105,7 @@ export default function Calendar() {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [alertMessage, setAlertMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [connectingEmployees, setConnectingEmployees] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
   
   // Moniteye Events State
   const [moniteyeEvents, setMoniteyeEvents] = useState<MoniteyeEvent[]>([]);
@@ -104,6 +113,13 @@ export default function Calendar() {
   const [editingEvent, setEditingEvent] = useState<MoniteyeEvent | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
   
+  logDebug('Initial state set', {
+    currentDate: currentDate?.toISOString(),
+    selectedEmployees,
+    loading,
+    calendarEventsLoading
+  });
+
   // Initialize date only on client-side to avoid hydration mismatch
   useEffect(() => {
     console.log('📅 Initializing calendar with current date');
@@ -365,90 +381,65 @@ export default function Calendar() {
 
   // Memoized function to fetch calendar events - prevents unnecessary re-renders
   const fetchCalendarEvents = useCallback(async () => {
+    logDebug('fetchCalendarEvents called', { selectedEmployees, loading: calendarEventsLoading });
+    
     if (selectedEmployees.length === 0) {
-      console.log('📝 No employees selected, skipping calendar events fetch');
+      logDebug('No employees selected, skipping fetch');
+      setCalendarEvents([]);
       setCalendarEventsLoading(false);
-      setEmployeeCalendarEvents([]);
       return;
     }
 
     try {
       setCalendarEventsLoading(true);
-      console.log('🔄 Fetching calendar events for:', selectedEmployees);
-      
-      // Get active employees first to determine which ones have OAuth tokens
-      const subscriptionsResponse = await fetch('/api/employee-calendar-subscriptions', {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!subscriptionsResponse.ok) {
-        throw new Error(`Failed to fetch employee subscriptions: ${subscriptionsResponse.status}`);
-      }
-      
-      const subscriptionsData = await subscriptionsResponse.json();
-      const activeEmployees = subscriptionsData.calendars
-        .filter((cal: EmployeeCalendar) => cal.isActive && selectedEmployees.includes(cal.employeeId))
-        .map((cal: EmployeeCalendar) => cal.employeeId);
-      
-      console.log('👥 Active employees with OAuth tokens:', activeEmployees);
-      
-      // Fetch events for each active employee individually
-      const allEvents: EmployeeCalendarEvent[] = [];
-      
-      for (const employeeId of activeEmployees) {
-        try {
-          console.log(`🔄 Fetching events for ${employeeId}...`);
-          const response = await fetch(`/api/simple-calendar-integration?employeeId=${employeeId}`, {
-            headers: {
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
-            }
+      setError(null);
+      logDebug('Starting calendar events fetch for employees', selectedEmployees);
+
+      const promises = selectedEmployees.map(async (employeeId) => {
+        logDebug(`Fetching events for employee: ${employeeId}`);
+        const response = await fetch(`/api/simple-calendar-integration?employeeId=${employeeId}`);
+        logDebug(`Response status for ${employeeId}:`, response.status);
+        
+        if (!response.ok) {
+          logDebug(`Error response for ${employeeId}:`, {
+            status: response.status,
+            statusText: response.statusText
           });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.events && data.events.length > 0) {
-              allEvents.push(...data.events);
-              console.log(`✅ Loaded ${data.events.length} events for ${employeeId}`);
-            } else {
-              console.log(`📝 No events found for ${employeeId}`);
-            }
-          } else {
-            console.warn(`⚠️ Failed to fetch events for ${employeeId}: ${response.status}`);
-          }
-        } catch (error) {
-          console.warn(`⚠️ Error fetching events for ${employeeId}:`, error);
+          throw new Error(`Failed to fetch events for ${employeeId}: ${response.statusText}`);
         }
-      }
+        
+        const data = await response.json();
+        logDebug(`Data received for ${employeeId}:`, {
+          success: data.success,
+          totalEvents: data.totalEvents,
+          eventsLength: data.events?.length
+        });
+        
+        return data.events || [];
+      });
+
+      const results = await Promise.all(promises);
+      const allEvents = results.flat();
       
-      setEmployeeCalendarEvents(allEvents);
-      
-      console.log('✅ Calendar events loaded:', {
+      logDebug('All calendar events fetched successfully', {
         totalEvents: allEvents.length,
-        activeEmployees,
-        selectedEmployees: selectedEmployees,
-        eventsByEmployee: activeEmployees.map((empId: string) => ({
-          employeeId: empId,
-          events: allEvents.filter(event => event.employeeId === empId).length
+        eventsByEmployee: results.map((events, index) => ({
+          employee: selectedEmployees[index],
+          count: events.length
         }))
       });
+
+      setCalendarEvents(allEvents);
+      setCalendarEventsLoading(false);
+      setError(null);
       
     } catch (error) {
-      console.error('❌ Failed to fetch employee calendar events:', error);
-      setEmployeeCalendarEvents([]);
-      
-      // Show user-friendly error message
-      setAlertMessage({ 
-        type: 'error', 
-        message: 'Failed to load calendar events. Please try refreshing the page.' 
-      });
-    } finally {
+      logDebug('Error fetching calendar events:', error);
+      console.error('Calendar fetch error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch calendar events');
       setCalendarEventsLoading(false);
     }
-  }, [selectedEmployees]); // Include selectedEmployees dependency
+  }, [selectedEmployees]);
 
   // Define consistent color scheme for employees
   const getEmployeeColor = (employeeName: string) => {
@@ -717,8 +708,6 @@ export default function Calendar() {
     }
   };
 
-
-
   // Handle disconnect calendar
   const handleDisconnectCalendar = async (employeeId: string) => {
     if (!confirm('Are you sure you want to disconnect this calendar?')) {
@@ -786,8 +775,115 @@ export default function Calendar() {
     });
   }, [currentDate, employeeLoading, calendarEventsLoading, selectedEmployees.length, employeeCalendarEvents.length, calendarEvents.length]);
 
+  // Enhanced component initialization with detailed logging
+  useEffect(() => {
+    logDebug('Component mount useEffect triggered');
+    
+    // Initialize current date if not set
+    if (!currentDate) {
+      logDebug('Setting current date to today');
+      setCurrentDate(new Date());
+    }
+
+    // Set loading to false after initial setup
+    logDebug('Setting initial loading to false');
+    setLoading(false);
+
+    return () => {
+      logDebug('Component unmounting');
+    };
+  }, []);
+
+  // Enhanced calendar events fetch effect
+  useEffect(() => {
+    logDebug('Calendar events fetch useEffect triggered', {
+      currentDate: currentDate?.toISOString(),
+      selectedEmployeesLength: selectedEmployees.length,
+      loading
+    });
+
+    if (currentDate && !loading) {
+      logDebug('Conditions met, calling fetchCalendarEvents');
+      fetchCalendarEvents();
+    } else {
+      logDebug('Conditions not met for fetchCalendarEvents', {
+        hasCurrentDate: !!currentDate,
+        loading
+      });
+    }
+  }, [currentDate, selectedEmployees]);
+
+  // Enhanced Moniteye events fetch effect
+  useEffect(() => {
+    logDebug('Moniteye events fetch useEffect triggered');
+    
+    const fetchMoniteyeEvents = async () => {
+      try {
+        logDebug('Fetching Moniteye events');
+        const response = await fetch('/api/moniteye-events');
+        logDebug('Moniteye events response status:', response.status);
+        
+        if (response.ok) {
+          const events = await response.json();
+          logDebug('Moniteye events fetched successfully', { count: events.length });
+          setMoniteyeEvents(events);
+        } else {
+          logDebug('Failed to fetch Moniteye events', {
+            status: response.status,
+            statusText: response.statusText
+          });
+        }
+      } catch (error) {
+        logDebug('Error fetching Moniteye events:', error);
+        console.error('Error fetching Moniteye events:', error);
+      }
+    };
+
+    fetchMoniteyeEvents();
+  }, []);
+
+  // Fallback useEffect to ensure currentDate gets initialized
+  useEffect(() => {
+    logDebug('Fallback currentDate useEffect triggered');
+    
+    const timer = setTimeout(() => {
+      if (!currentDate) {
+        logDebug('Fallback: setting current date after timeout');
+        setCurrentDate(new Date());
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [currentDate]);
+
+  // Enhanced auto-refresh effect
+  useEffect(() => {
+    logDebug('Auto-refresh useEffect triggered', { autoRefreshEnabled });
+    
+    if (!autoRefreshEnabled) return;
+
+    const interval = setInterval(() => {
+      logDebug('Auto-refresh triggered, fetching calendar events');
+      fetchCalendarEvents();
+    }, 30000); // Refresh every 30 seconds
+
+    return () => {
+      logDebug('Clearing auto-refresh interval');
+      clearInterval(interval);
+    };
+  }, [autoRefreshEnabled]);
+
+  // Enhanced loading condition with detailed logging
+  logDebug('Render logic check', {
+    loading,
+    calendarEventsLoading,
+    hasCurrentDate: !!currentDate,
+    shouldShowLoading: loading && calendarEventsLoading
+  });
+
   // Show loading state only if data is still loading
   if (loading && calendarEventsLoading) {
+    logDebug('Showing loading state');
     return (
       <Layout>
         <div className="flex-1 bg-gray-50 p-6 flex items-center justify-center">
@@ -795,11 +891,35 @@ export default function Calendar() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <p>Loading calendar...</p>
             <p className="text-sm text-gray-500 mt-2">Fetching calendar data...</p>
+            <p className="text-xs text-gray-400 mt-1">Debug: loading={loading.toString()}, calendarEventsLoading={calendarEventsLoading.toString()}</p>
           </div>
         </div>
       </Layout>
     );
   }
+
+  if (!currentDate) {
+    logDebug('No current date set, showing date loading state');
+    return (
+      <Layout>
+        <div className="flex-1 bg-gray-50 p-6 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p>Initializing calendar...</p>
+            <p className="text-sm text-gray-500 mt-2">Setting up date...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  logDebug('Rendering main calendar component', {
+    currentDate: currentDate.toISOString(),
+    calendarEventsCount: calendarEvents.length,
+    moniteyeEventsCount: moniteyeEvents.length,
+    selectedEmployeesCount: selectedEmployees.length,
+    error
+  });
 
   return (
     <Layout>
