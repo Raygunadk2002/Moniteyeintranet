@@ -160,9 +160,13 @@ export default function Calendar() {
           .filter((cal: EmployeeCalendar) => {
             console.log(`🔄 Sync - Checking employee ${cal.employeeId}:`, { 
               isActive: cal.isActive, 
-              employeeName: cal.employeeName 
+              employeeName: cal.employeeName,
+              isActiveType: typeof cal.isActive,
+              rawCalendar: cal
             });
-            return cal.isActive;
+            const isActiveResult = Boolean(cal.isActive);
+            console.log(`🔄 Sync - Filter result for ${cal.employeeId}:`, isActiveResult);
+            return isActiveResult;
           })
           .map((cal: EmployeeCalendar) => cal.employeeId);
         
@@ -380,9 +384,13 @@ export default function Calendar() {
           .filter((cal: EmployeeCalendar) => {
             console.log(`🔍 Checking employee ${cal.employeeId}:`, { 
               isActive: cal.isActive, 
-              employeeName: cal.employeeName 
+              employeeName: cal.employeeName,
+              isActiveType: typeof cal.isActive,
+              rawCalendar: cal
             });
-            return cal.isActive;
+            const isActiveResult = Boolean(cal.isActive);
+            console.log(`🔍 Filter result for ${cal.employeeId}:`, isActiveResult);
+            return isActiveResult;
           })
           .map((cal: EmployeeCalendar) => cal.employeeId);
         
