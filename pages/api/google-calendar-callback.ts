@@ -349,6 +349,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         google_token_expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
         is_active: true,
         updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'employee_id'
       });
 
     const dbDuration = Date.now() - dbStart;
