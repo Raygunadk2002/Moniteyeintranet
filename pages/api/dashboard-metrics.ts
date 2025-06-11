@@ -112,7 +112,19 @@ export default async function handler(
     }
 
     // Fetch Pipedrive data with direct function call
-    let pipedriveData = { newDealsCount: 0, newDealsValue: 0, currency: 'GBP' };
+    let pipedriveData: { 
+      newDealsCount: number; 
+      newDealsValue: number; 
+      currency: string; 
+      deals?: Array<{
+        id: string;
+        title: string;
+        value: number;
+        currency: string;
+        add_time: string;
+        status: string;
+      }>; 
+    } = { newDealsCount: 0, newDealsValue: 0, currency: 'GBP' };
     
     try {
       const mockReq = createMockRequest();
@@ -291,8 +303,51 @@ export default async function handler(
       });
     }
 
-    // Sales/Deal activities
-    if (pipedriveData.newDealsCount > 0) {
+    // Sales/Deal activities - Enhanced with individual deal details
+    if (pipedriveData.newDealsCount > 0 && pipedriveData.deals && Array.isArray(pipedriveData.deals)) {
+      // Add individual deal activities for the most recent deals
+      const sortedDeals = pipedriveData.deals
+        .sort((a: any, b: any) => new Date(b.add_time).getTime() - new Date(a.add_time).getTime())
+        .slice(0, 3); // Show top 3 most recent deals
+
+      sortedDeals.forEach((deal: any) => {
+        const dealDate = new Date(deal.add_time);
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - dealDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        let timeAgo: string;
+        if (diffDays === 1) {
+          timeAgo = 'Yesterday';
+        } else if (diffDays <= 7) {
+          timeAgo = `${diffDays} days ago`;
+        } else if (diffDays <= 30) {
+          timeAgo = `${Math.ceil(diffDays / 7)} weeks ago`;
+        } else {
+          timeAgo = 'Over a month ago';
+        }
+
+        activities.push({
+          action: `New deal added: "${deal.title}" - ${currencySymbol}${deal.value.toLocaleString()}`,
+          user: 'Sales Team',
+          time: timeAgo,
+          type: 'deal'
+        });
+      });
+
+      // Add summary if there are more deals
+      if (pipedriveData.deals.length > 3) {
+        const additionalDeals = pipedriveData.deals.length - 3;
+        const totalValue = pipedriveData.deals.reduce((sum: number, deal: any) => sum + (deal.value || 0), 0);
+        activities.push({
+          action: `+${additionalDeals} more deals totaling ${currencySymbol}${totalValue.toLocaleString()} in last 30 days`,
+          user: 'Sales Team',
+          time: 'Last 30 days',
+          type: 'deal'
+        });
+      }
+    } else if (pipedriveData.newDealsCount > 0) {
+      // Fallback to generic summary if detailed deals data is not available
       activities.push({
         action: `${pipedriveData.newDealsCount} new ${pipedriveData.newDealsCount === 1 ? 'deal' : 'deals'} worth ${currencySymbol}${pipedriveData.newDealsValue.toLocaleString()}`,
         user: 'Sales Team',
