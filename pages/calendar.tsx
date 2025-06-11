@@ -82,7 +82,7 @@ interface CalendarEvent {
 }
 
 export default function Calendar() {
-  const [currentDate, setCurrentDate] = useState<Date | null>(null);
+  const [currentDate, setCurrentDate] = useState<Date | null>(new Date());
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [employeeHolidays, setEmployeeHolidays] = useState<EmployeeHoliday[]>([]);
   const [employeeCalendarEvents, setEmployeeCalendarEvents] = useState<EmployeeCalendarEvent[]>([]);
@@ -786,15 +786,15 @@ export default function Calendar() {
     });
   }, [currentDate, employeeLoading, calendarEventsLoading, selectedEmployees.length, employeeCalendarEvents.length, calendarEvents.length]);
 
-  // Show loading state if date hasn't been initialized yet
-  if (!currentDate) {
+  // Show loading state only if data is still loading
+  if (loading && calendarEventsLoading) {
     return (
       <Layout>
         <div className="flex-1 bg-gray-50 p-6 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
             <p>Loading calendar...</p>
-            <p className="text-sm text-gray-500 mt-2">Initializing calendar component...</p>
+            <p className="text-sm text-gray-500 mt-2">Fetching calendar data...</p>
           </div>
         </div>
       </Layout>
