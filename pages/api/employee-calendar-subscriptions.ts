@@ -73,16 +73,6 @@ async function fetchLiveCalendarData() {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Fetch employee calendar tokens from Supabase
-    const { data: tokenData, error } = await supabase
-      .from('employee_calendar_tokens')
-      .select('*');
-
-    if (error) {
-      console.error('Error fetching employee tokens:', error);
-      return null;
-    }
-
     // Create employee data with active status based on tokens
     const employees = [
       { employeeId: 'alex-keal', employeeName: 'Alex Keal', email: 'alex@moniteye.com', calendarType: 'google' },
@@ -90,15 +80,25 @@ async function fetchLiveCalendarData() {
       { employeeId: 'richard-booth', employeeName: 'Richard Booth', email: 'richard@moniteye.com', calendarType: 'google' }
     ];
 
-    const employeesWithStatus = employees.map(emp => {
-      const hasToken = tokenData?.find(token => token.employee_id === emp.employeeId);
-      return {
+    const employeesWithStatus = [];
+    
+    // Check each employee individually (same pattern as working API)
+    for (const emp of employees) {
+      const { data: tokenData, error } = await supabase
+        .from('employee_calendar_tokens')
+        .select('*')
+        .eq('employee_id', emp.employeeId)
+        .single();
+
+      const hasToken = !error && tokenData;
+      
+      employeesWithStatus.push({
         ...emp,
         isActive: !!hasToken,
         connectionStatus: hasToken ? 'connected' : 'disconnected' as 'connected' | 'disconnected',
         lastSync: hasToken ? new Date().toISOString() : undefined
-      };
-    });
+      });
+    }
 
     return employeesWithStatus;
   } catch (error) {
