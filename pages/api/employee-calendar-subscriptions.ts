@@ -59,19 +59,47 @@ const EMPLOYEE_CONFIG = [
 
 async function fetchLiveCalendarData() {
   try {
-    // Fetch real-time data from the Google Calendar OAuth API
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'http://localhost:3000';
+    // Import and use the logic directly instead of making HTTP calls
+    const { createClient } = await import('@supabase/supabase-js');
     
-    const response = await fetch(`${baseUrl}/api/google-calendar-events`);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch calendar data: ${response.status}`);
+    if (!supabaseUrl || !supabaseKey) {
+      console.log('Supabase credentials not available, using fallback data');
+      return null;
     }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
     
-    const data = await response.json();
-    return data.employees || [];
+    // Fetch employee calendar tokens from Supabase
+    const { data: tokenData, error } = await supabase
+      .from('employee_calendar_tokens')
+      .select('*');
+
+    if (error) {
+      console.error('Error fetching employee tokens:', error);
+      return null;
+    }
+
+    // Create employee data with active status based on tokens
+    const employees = [
+      { employeeId: 'alex-keal', employeeName: 'Alex Keal', email: 'alex@moniteye.com', calendarType: 'google' },
+      { employeeId: 'mark-nockles', employeeName: 'Mark Nockles', email: 'mark.n@moniteye.com', calendarType: 'google' },
+      { employeeId: 'richard-booth', employeeName: 'Richard Booth', email: 'richard@moniteye.com', calendarType: 'google' }
+    ];
+
+    const employeesWithStatus = employees.map(emp => {
+      const hasToken = tokenData?.find(token => token.employee_id === emp.employeeId);
+      return {
+        ...emp,
+        isActive: !!hasToken,
+        connectionStatus: hasToken ? 'connected' : 'disconnected' as 'connected' | 'disconnected',
+        lastSync: hasToken ? new Date().toISOString() : undefined
+      };
+    });
+
+    return employeesWithStatus;
   } catch (error) {
     console.error('Error fetching live calendar data:', error);
     return null;
