@@ -64,14 +64,14 @@ async function fetchLiveCalendarData() {
     const { createClient } = await import('@supabase/supabase-js');
     
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
-    if (!supabaseUrl || !supabaseKey) {
+    if (!supabaseUrl || !supabaseServiceKey) {
       console.log('Supabase credentials not available, using fallback data');
       return null;
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
     // Create employee data with active status based on tokens
     const employees = [
