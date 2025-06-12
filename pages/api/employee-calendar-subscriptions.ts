@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { google } from 'googleapis';
 
+// Force redeploy - ensure production uses latest Supabase query logic
 interface EmployeeCalendar {
   id: string;
   employeeId: string;
