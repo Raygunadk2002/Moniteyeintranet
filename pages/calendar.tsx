@@ -173,7 +173,20 @@ export default function Calendar() {
         console.log('🔄 Sync - Setting selected employees:', activeEmployees);
         setSelectedEmployees(activeEmployees);
         
-        console.log('🔄 Updated employee selection after sync:', activeEmployees);
+        // Force a state update with a small delay to ensure it takes effect
+        setTimeout(() => {
+          console.log('🔄 Verifying selectedEmployees state after timeout:', activeEmployees);
+          setSelectedEmployees(prev => {
+            console.log('🔄 Current selectedEmployees in timeout:', prev);
+            if (prev.length !== activeEmployees.length) {
+              console.log('⚠️ State mismatch detected, forcing update');
+              return activeEmployees;
+            }
+            return prev;
+          });
+        }, 100);
+        
+        logDebug('✅ Selected employees set. Current value should be:', activeEmployees);
       }
       
       // Use the new fetchCalendarEvents function
@@ -366,7 +379,16 @@ export default function Calendar() {
     const fetchEmployeeCalendars = async () => {
       try {
         logDebug('🚀 Starting fetchEmployeeCalendars');
-        const response = await fetch('/api/employee-calendar-subscriptions');
+        
+        // Add cache-busting parameter to ensure fresh data
+        const timestamp = Date.now();
+        const response = await fetch(`/api/employee-calendar-subscriptions?_t=${timestamp}`, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -375,7 +397,24 @@ export default function Calendar() {
         const data = await response.json();
         logDebug('📡 API Response received:', {
           calendarsLength: data.calendars?.length,
-          rawData: data.calendars
+          rawData: data.calendars,
+          dataSource: data.dataSource,
+          lastUpdated: data.lastUpdated
+        });
+        
+        // Log each calendar individually for debugging
+        console.log('🔍 DETAILED CALENDAR ANALYSIS:');
+        data.calendars?.forEach((cal: EmployeeCalendar, index: number) => {
+          console.log(`Calendar ${index + 1}:`, {
+            employeeId: cal.employeeId,
+            employeeName: cal.employeeName,
+            isActive: cal.isActive,
+            isActiveType: typeof cal.isActive,
+            isActiveValue: cal.isActive,
+            booleanConversion: Boolean(cal.isActive),
+            strictEquality: cal.isActive === true,
+            fullCalendar: cal
+          });
         });
         
         setEmployeeCalendars(data.calendars || []);
@@ -401,7 +440,22 @@ export default function Calendar() {
           .map((cal: EmployeeCalendar) => cal.employeeId);
         
         logDebug('🎯 About to set selected employees:', activeEmployees);
+        console.log('🎯 ACTIVE EMPLOYEES FOUND:', activeEmployees);
         setSelectedEmployees(activeEmployees);
+        
+        // Force a state update with a small delay to ensure it takes effect
+        setTimeout(() => {
+          console.log('🔄 Verifying selectedEmployees state after timeout:', activeEmployees);
+          setSelectedEmployees(prev => {
+            console.log('🔄 Current selectedEmployees in timeout:', prev);
+            if (prev.length !== activeEmployees.length) {
+              console.log('⚠️ State mismatch detected, forcing update');
+              return activeEmployees;
+            }
+            return prev;
+          });
+        }, 100);
+        
         logDebug('✅ Selected employees set. Current value should be:', activeEmployees);
         
         console.log('✅ Employee calendars loaded:', {
@@ -1280,14 +1334,27 @@ export default function Calendar() {
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <button
-                      onClick={handleSyncCalendars}
-                      disabled={calendarEventsLoading}
-                      className="flex items-center space-x-1 px-3 py-1 bg-green-100 text-green-700 rounded text-sm hover:bg-green-200 transition-colors disabled:opacity-50"
-                    >
-                      <span>🔄</span>
-                      <span>{calendarEventsLoading ? 'Syncing...' : 'Sync All'}</span>
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleSyncCalendars}
+                        disabled={calendarEventsLoading}
+                        className="flex items-center space-x-1 px-3 py-1 bg-green-100 text-green-700 rounded text-sm hover:bg-green-200 transition-colors disabled:opacity-50"
+                      >
+                        <span>🔄</span>
+                        <span>{calendarEventsLoading ? 'Syncing...' : 'Sync All'}</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          console.log('🔧 DEBUG: Manual employee refresh triggered');
+                          window.location.reload();
+                        }}
+                        className="flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200 transition-colors"
+                      >
+                        <span>🔧</span>
+                        <span>Debug Refresh</span>
+                      </button>
+                    </div>
                     
                     <div className="text-xs text-gray-500">
                       {employeeCalendars.filter(cal => cal.isActive).length} of {employeeCalendars.length} calendars connected
