@@ -8,6 +8,7 @@ interface Task {
   priority?: "Low" | "Medium" | "High" | "Critical";
   assignee?: string;
   tags?: string[];
+  man_days?: number;
   column_id: string;
   order_index: number;
   created_at: Date;
@@ -103,7 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     } else if (req.method === 'POST') {
       // Create a new task
-      const { title, description, priority, assignee, tags, column_id } = req.body;
+      const { title, description, priority, assignee, tags, man_days, column_id } = req.body;
 
       if (!title || !column_id) {
         return res.status(400).json({ error: 'Title and column_id are required' });
@@ -133,6 +134,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           priority: priority || 'Medium',
           assignee,
           tags: tags || [],
+          man_days: man_days || 0,
           column_id,
           order_index: nextOrderIndex
         })
@@ -148,7 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     } else if (req.method === 'PUT') {
       // Update an existing task
-      const { id, title, description, priority, assignee, tags, column_id, order_index } = req.body;
+      const { id, title, description, priority, assignee, tags, man_days, column_id, order_index } = req.body;
 
       if (!id) {
         return res.status(400).json({ error: 'Task ID is required' });
@@ -160,6 +162,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (priority !== undefined) updateData.priority = priority;
       if (assignee !== undefined) updateData.assignee = assignee;
       if (tags !== undefined) updateData.tags = tags;
+      if (man_days !== undefined) updateData.man_days = man_days;
       if (column_id !== undefined) updateData.column_id = column_id;
       if (order_index !== undefined) updateData.order_index = order_index;
 

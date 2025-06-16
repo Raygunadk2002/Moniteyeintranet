@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   priority text CHECK (priority IN ('Low', 'Medium', 'High', 'Critical')) DEFAULT 'Medium',
   assignee text,
   tags text[] DEFAULT '{}',
+  man_days numeric(5,2) DEFAULT 0,
   column_id text NOT NULL REFERENCES task_columns(id) ON DELETE CASCADE,
   order_index integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,

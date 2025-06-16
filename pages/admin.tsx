@@ -143,6 +143,68 @@ export default function Admin() {
     }
   };
 
+  const [isRunning, setIsRunning] = useState(false);
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState<"success" | "error" | "info">("info");
+
+  const runMigration = async () => {
+    setIsRunning(true);
+    setMessage("");
+    
+    try {
+      const response = await fetch('/api/migrate-man-days', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setMessageType("success");
+        setMessage(`✅ Migration completed successfully! ${data.message}`);
+      } else {
+        setMessageType("error");
+        setMessage(`❌ Migration failed: ${data.error}`);
+      }
+    } catch (error) {
+      setMessageType("error");
+      setMessage(`❌ Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const setupTasksDatabase = async () => {
+    setIsRunning(true);
+    setMessage("");
+    
+    try {
+      const response = await fetch('/api/setup-tasks-database', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setMessageType("success");
+        setMessage(`✅ Database setup completed successfully!`);
+      } else {
+        setMessageType("error");
+        setMessage(`❌ Setup failed: ${data.error}`);
+      }
+    } catch (error) {
+      setMessageType("error");
+      setMessage(`❌ Setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -515,6 +577,100 @@ export default function Admin() {
                   <li>• Use separate columns for dates and amounts (don't combine in one cell)</li>
                   <li>• System handles mixed date formats and flexible column orders automatically</li>
                 </ul>
+              </div>
+            </div>
+
+            {/* Database Management Section */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Database Management</h2>
+              
+              <div className="space-y-4">
+                <div className="border rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Setup Tasks Database</h3>
+                  <p className="text-gray-600 mb-4">
+                    Initialize the tasks database with default columns and sample data.
+                  </p>
+                  <button
+                    onClick={setupTasksDatabase}
+                    disabled={isRunning}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isRunning ? "Setting up..." : "Setup Tasks Database"}
+                  </button>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Add Man Days Migration</h3>
+                  <p className="text-gray-600 mb-4">
+                    Add the "man_days" column to the tasks table to track estimated work duration for each task.
+                  </p>
+                  <button
+                    onClick={runMigration}
+                    disabled={isRunning}
+                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isRunning ? "Running Migration..." : "Run Man Days Migration"}
+                  </button>
+                </div>
+              </div>
+
+              {message && (
+                <div className={`mt-4 p-4 rounded-lg ${
+                  messageType === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
+                  messageType === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
+                  'bg-blue-50 text-blue-800 border border-blue-200'
+                }`}>
+                  {message}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Links Section */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Quick Links</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <a
+                  href="/tasks"
+                  className="p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <h3 className="font-semibold text-blue-800">📋 Tasks</h3>
+                  <p className="text-sm text-blue-600">Manage project tasks</p>
+                </a>
+                <a
+                  href="/calendar"
+                  className="p-4 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+                >
+                  <h3 className="font-semibold text-green-800">📅 Calendar</h3>
+                  <p className="text-sm text-green-600">View team calendars</p>
+                </a>
+                <a
+                  href="/equipment"
+                  className="p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+                >
+                  <h3 className="font-semibold text-purple-800">🔧 Equipment</h3>
+                  <p className="text-sm text-purple-600">Manage equipment inventory</p>
+                </a>
+              </div>
+            </div>
+
+            {/* Feature Info Section */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-2xl font-semibold text-gray-800 mb-4">New Features</h2>
+              <div className="space-y-4">
+                <div className="border-l-4 border-blue-500 pl-4">
+                  <h3 className="font-semibold text-gray-800">Man Days Tracking</h3>
+                  <p className="text-gray-600">
+                    Tasks now support estimated man days to help with project planning and resource allocation. 
+                    The man days are displayed on each task card and totaled at the column level.
+                  </p>
+                </div>
+                <div className="border-l-4 border-green-500 pl-4">
+                  <h3 className="font-semibold text-gray-800">Enhanced Task Cards</h3>
+                  <p className="text-gray-600">
+                    Task cards now show man days estimation alongside priority and assignee information.
+                    Column headers display the total man days for all tasks in that column.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

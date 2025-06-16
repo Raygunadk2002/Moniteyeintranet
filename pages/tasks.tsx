@@ -10,6 +10,7 @@ interface Task {
   priority?: "Low" | "Medium" | "High" | "Critical";
   assignee?: string;
   tags?: string[];
+  man_days?: number;
   column_id: string;
   order_index: number;
   created_at: string;
@@ -50,6 +51,7 @@ export default function Tasks() {
     description: "",
     priority: "Medium" as Task["priority"],
     assignee: "",
+    man_days: 0,
   });
 
   // Load tasks and columns from API
@@ -153,6 +155,7 @@ export default function Tasks() {
           priority: newTask.priority,
           assignee: newTask.assignee,
           tags: [],
+          man_days: newTask.man_days,
           column_id: selectedColumn,
         }),
       });
@@ -164,7 +167,7 @@ export default function Tasks() {
       // Reload data to get the new task
       await loadData();
 
-      setNewTask({ title: "", description: "", priority: "Medium", assignee: "" });
+      setNewTask({ title: "", description: "", priority: "Medium", assignee: "", man_days: 0 });
       setShowAddTaskModal(false);
       setSelectedColumn("");
     } catch (error) {
@@ -275,6 +278,7 @@ export default function Tasks() {
           priority: editingTask.priority,
           assignee: editingTask.assignee,
           tags: editingTask.tags,
+          man_days: editingTask.man_days,
         }),
       });
 
@@ -425,6 +429,11 @@ export default function Tasks() {
                             <span className="bg-gray-100 text-gray-600 text-sm px-2 py-1 rounded-full">
                               {column.tasks.length}
                             </span>
+                            {column.tasks.length > 0 && (
+                              <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded-full">
+                                🕒 {column.tasks.reduce((total, task) => total + (task.man_days || 0), 0)}d
+                              </span>
+                            )}
                             <button
                               onClick={() => {
                                 setSelectedColumn(column.id);
@@ -483,11 +492,18 @@ export default function Tasks() {
                                   )}
 
                                   <div className="flex items-center justify-between">
-                                    {task.priority && (
-                                      <span className={`text-xs px-2 py-1 rounded-full border ${getPriorityColor(task.priority)}`}>
-                                        {task.priority}
-                                      </span>
-                                    )}
+                                    <div className="flex items-center space-x-2">
+                                      {task.priority && (
+                                        <span className={`text-xs px-2 py-1 rounded-full border ${getPriorityColor(task.priority)}`}>
+                                          {task.priority}
+                                        </span>
+                                      )}
+                                      {task.man_days && task.man_days > 0 && (
+                                        <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                          🕒 {task.man_days}d
+                                        </span>
+                                      )}
+                                    </div>
                                     
                                     {task.assignee && (
                                       <div className="flex items-center space-x-1">
@@ -588,6 +604,21 @@ export default function Tasks() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Man Days
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={newTask.man_days}
+                    onChange={(e) => setNewTask({ ...newTask, man_days: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., 2.5"
+                  />
+                </div>
+
                 {!selectedColumn && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -614,7 +645,7 @@ export default function Tasks() {
                   onClick={() => {
                     setShowAddTaskModal(false);
                     setSelectedColumn("");
-                    setNewTask({ title: "", description: "", priority: "Medium", assignee: "" });
+                    setNewTask({ title: "", description: "", priority: "Medium", assignee: "", man_days: 0 });
                   }}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
@@ -735,6 +766,21 @@ export default function Tasks() {
                     onChange={(e) => setEditingTask({ ...editingTask, assignee: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Assign to team member"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Man Days
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={editingTask.man_days || 0}
+                    onChange={(e) => setEditingTask({ ...editingTask, man_days: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g., 2.5"
                   />
                 </div>
 
