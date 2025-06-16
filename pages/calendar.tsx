@@ -1001,7 +1001,7 @@ export default function Calendar() {
     const interval = setInterval(() => {
       logDebug('Auto-refresh triggered, fetching calendar events');
       fetchCalendarEvents();
-    }, 30000); // Refresh every 30 seconds
+    }, 300000); // Refresh every 5 minutes (was 30 seconds)
 
     return () => {
       logDebug('Clearing auto-refresh interval');
@@ -1017,8 +1017,9 @@ export default function Calendar() {
     shouldShowLoading: loading && calendarEventsLoading
   });
 
-  // Show loading state only if data is still loading
-  if (loading && calendarEventsLoading) {
+  // Show loading state only if data is still loading on initial load
+  // Don't show loading screen during auto-refresh to prevent calendar from disappearing
+  if (loading && calendarEventsLoading && !currentDate) {
     logDebug('Showing loading state');
     return (
       <Layout>
@@ -1148,10 +1149,19 @@ export default function Calendar() {
                   <button
                     onClick={handleSyncCalendars}
                     disabled={calendarEventsLoading}
-                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
                   >
+                    {calendarEventsLoading && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    )}
                     {calendarEventsLoading ? 'Syncing...' : '🔄 Sync'}
                   </button>
+                  {calendarEventsLoading && (
+                    <div className="flex items-center text-sm text-blue-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Refreshing events...
+                    </div>
+                  )}
                 </div>
               </div>
 
