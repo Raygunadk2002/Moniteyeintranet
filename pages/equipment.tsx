@@ -1,22 +1,187 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import Layout from "../components/Layout";
+import Link from "next/link";
+
+// Gantt Chart Component
+interface GanttChartProps {
+  equipment: Equipment[];
+}
+
+const GanttChart: React.FC<GanttChartProps> = ({ equipment }) => {
+  // Filter equipment that has warranty_expiry (project end dates)
+  const equipmentWithDates = equipment.filter(item => 
+    item.warranty_expiry && new Date(item.warranty_expiry) > new Date()
+  );
+
+  if (equipmentWithDates.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-gray-500">
+          <div className="text-4xl mb-4">📊</div>
+          <p className="text-lg font-medium">No deployment timeline data</p>
+          <p className="text-sm">Equipment needs project end dates to show in Gantt chart.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate date range
+  const today = new Date();
+  const dates = equipmentWithDates.map(item => new Date(item.warranty_expiry!));
+  const minDate = new Date(Math.min(today.getTime(), ...dates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+  
+  // Generate month labels
+  const months: Date[] = [];
+  const current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+  while (current <= maxDate) {
+    months.push(new Date(current));
+    current.setMonth(current.getMonth() + 1);
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-500';
+      case 'maintenance': return 'bg-yellow-500';
+      case 'retired': return 'bg-gray-500';
+      case 'lost': return 'bg-red-500';
+      default: return 'bg-blue-500';
+    }
+  };
+
+  const calculateBarWidth = (startDate: Date, endDate: Date) => {
+    const totalDays = (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24);
+    const itemDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+    return Math.max((itemDays / totalDays) * 100, 2); // Minimum 2% width
+  };
+
+  const calculateBarOffset = (startDate: Date) => {
+    const totalDays = (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24);
+    const offsetDays = (startDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24);
+    return (offsetDays / totalDays) * 100;
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      {/* Timeline Header */}
+      <div className="mb-4">
+        <div className="flex items-center text-sm text-gray-600 mb-2">
+          <div className="w-64 flex-shrink-0">Equipment</div>
+          <div className="flex-1 grid grid-cols-12 gap-1 text-center">
+            {months.slice(0, 12).map((month, index) => (
+              <div key={index} className="text-xs">
+                {month.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Current date indicator */}
+        <div className="flex items-center">
+          <div className="w-64 flex-shrink-0"></div>
+          <div className="flex-1 relative">
+            <div 
+              className="absolute top-0 w-0.5 h-full bg-red-500 z-10"
+              style={{ left: `${calculateBarOffset(today)}%` }}
+            >
+              <div className="absolute -top-2 -left-2 w-4 h-4 bg-red-500 rounded-full"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Equipment Rows */}
+      <div className="space-y-2">
+        {equipmentWithDates.map((item) => {
+          const startDate = today;
+          const endDate = item.warranty_expiry ? 
+            new Date(item.warranty_expiry) : 
+            item.next_calibration_due ? 
+              new Date(item.next_calibration_due) : 
+              new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // Default to 1 year from now
+          const barWidth = calculateBarWidth(startDate, endDate);
+          const barOffset = calculateBarOffset(startDate);
+          
+          const endDateLabel = item.warranty_expiry ? 
+            'Off Hire' : 
+            item.next_calibration_due ? 
+              'Calibration Due' : 
+              'No End Date';
+          
+          return (
+            <div key={item.serial_number} className="flex items-center">
+              {/* Equipment Info */}
+              <div className="w-64 flex-shrink-0 pr-4">
+                <Link href={`/equipment/${encodeURIComponent(item.serial_number)}`} className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                  {item.name}
+                </Link>
+                <div className="text-xs text-gray-500">
+                  {item.equipment_id} • {formatLocation(item.current_location || item.location_id)}
+                </div>
+                <div className="text-xs text-gray-400">
+                  {endDateLabel}: {formatDate(item.warranty_expiry || item.next_calibration_due)}
+                </div>
+              </div>
+              
+              {/* Timeline Bar */}
+              <div className="flex-1 relative h-8 bg-gray-100 rounded">
+                <div
+                  className={`absolute top-1 bottom-1 rounded ${getStatusColor(item.status)} opacity-80`}
+                  style={{
+                    left: `${barOffset}%`,
+                    width: `${barWidth}%`
+                  }}
+                >
+                  <div className="px-2 py-1 text-xs text-white font-medium truncate">
+                    {item.status === 'maintenance' ? 'At Calibration' : 
+                     item.status === 'active' && item.current_location?.toLowerCase().includes('office') ? 'In Stock' :
+                     'On Site'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="mt-6 flex flex-wrap gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-500 rounded"></div>
+          <span>On Site</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+          <span>At Calibration</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-blue-500 rounded"></div>
+          <span>In Stock</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-0.5 h-4 bg-red-500"></div>
+          <span>Today</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface Equipment {
-  id: string;
-  equipment_id: string;
+  serial_number: string; // Primary key - REQUIRED
+  equipment_id?: string; // Optional user-defined ID
   name: string;
   category_id: string;
   manufacturer?: string;
   model?: string;
-  serial_number?: string;
   purchase_date?: string;
   purchase_cost?: number;
-  warranty_expiry?: string;
+  warranty_expiry?: string; // This serves as the end date/off hire date
   location_id: string;
   status: 'active' | 'maintenance' | 'retired' | 'lost';
   condition_rating?: number;
   last_calibration_date?: string;
-  next_calibration_due?: string;
+  next_calibration_due?: string; // This is the key field for calibration tracking
   calibration_frequency_months?: number;
   notes?: string;
   specifications?: any;
@@ -24,6 +189,9 @@ interface Equipment {
   updated_at: string;
   category?: { id: string; name: string; description?: string; icon: string };
   location?: { id: string; name: string; address?: string };
+  current_location?: string;
+  current_location_id?: string;
+  last_moved?: string;
 }
 
 interface EquipmentCategory {
@@ -34,12 +202,7 @@ interface EquipmentCategory {
   count?: number;
 }
 
-interface EquipmentLocation {
-  id: string;
-  name: string;
-  address?: string;
-  count?: number;
-}
+
 
 interface UploadResult {
   success: boolean;
@@ -54,33 +217,77 @@ interface UploadResult {
   errors?: string[];
 }
 
+// Helper function to get calibration status color
+const getCalibrationStatus = (calibrationDate: string | null | undefined) => {
+  if (!calibrationDate) return { color: 'text-gray-500', bgColor: 'bg-gray-50', status: 'No Date' };
+  
+  const today = new Date();
+  const dueDate = new Date(calibrationDate);
+  const diffTime = dueDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 0) {
+    return { color: 'text-red-800', bgColor: 'bg-red-100', status: 'Overdue' };
+  } else if (diffDays <= 60) { // Within 2 months (60 days)
+    return { color: 'text-yellow-800', bgColor: 'bg-yellow-100', status: 'Due Soon' };
+  } else {
+    return { color: 'text-green-800', bgColor: 'bg-green-100', status: 'Current' };
+  }
+};
+
+// Helper function to format date
+const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleDateString();
+};
+
+const formatLocation = (location: string | null | undefined) => {
+  if (!location) return 'Unknown';
+  
+  // Convert kebab-case or snake_case to Title Case
+  return location
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, l => l.toUpperCase());
+};
+
 export default function Equipment() {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [categories, setCategories] = useState<EquipmentCategory[]>([]);
-  const [locations, setLocations] = useState<EquipmentLocation[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showAttachmentModal, setShowAttachmentModal] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
+  const [selectedEquipmentForAttachment, setSelectedEquipmentForAttachment] = useState<Equipment | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'gantt'>('table');
+  
+  // Sorting state
+  const [sortField, setSortField] = useState<keyof Equipment | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  
+  // Inline editing state
+  const [editingCell, setEditingCell] = useState<{serial_number: string, field: string} | null>(null);
+  const [editingValue, setEditingValue] = useState<string>('');
   
   // Upload states
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
 
-  // New equipment form
+  // New equipment form - serial_number is now required and primary
   const [newEquipment, setNewEquipment] = useState({
-    equipment_id: '',
+    serial_number: '', // REQUIRED - Primary key
+    equipment_id: '', // Optional
     name: '',
     category_id: '',
     manufacturer: '',
     model: '',
-    serial_number: '',
     purchase_date: '',
     purchase_cost: '',
     warranty_expiry: '',
@@ -90,21 +297,48 @@ export default function Equipment() {
     notes: ''
   });
 
-  // Summary stats
-  const [summary, setSummary] = useState({
-    total: 0,
-    active: 0,
-    maintenance: 0,
-    retired: 0,
-    calibrationDueSoon: 0,
-    overdueCalibrations: 0
-  });
+  // Calculate summary stats from equipment data in real-time
+  const summary = useMemo(() => {
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+    
+    const total = equipment.length;
+    const active = equipment.filter(item => item.status === 'active').length;
+    const maintenance = equipment.filter(item => item.status === 'maintenance').length;
+    const retired = equipment.filter(item => item.status === 'retired').length;
+    const lost = equipment.filter(item => item.status === 'lost').length;
+    
+    // Calculate calibration due soon (within 30 days)
+    const calibrationDueSoon = equipment.filter(item => {
+      if (!item.next_calibration_due) return false;
+      const dueDate = new Date(item.next_calibration_due);
+      return dueDate > now && dueDate <= thirtyDaysFromNow;
+    }).length;
+    
+    // Calculate overdue calibrations
+    const overdueCalibrations = equipment.filter(item => {
+      if (!item.next_calibration_due) return false;
+      const dueDate = new Date(item.next_calibration_due);
+      return dueDate < now;
+    }).length;
+    
+    return {
+      total,
+      active,
+      maintenance,
+      retired,
+      lost,
+      calibrationDueSoon,
+      overdueCalibrations
+    };
+  }, [equipment]);
 
   // Load equipment data
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/equipment');
+      // Add cache busting to ensure fresh data
+      const response = await fetch(`/api/equipment?t=${Date.now()}`);
       if (!response.ok) {
         throw new Error('Failed to fetch equipment');
       }
@@ -113,8 +347,6 @@ export default function Equipment() {
       
       setEquipment(data.equipment || []);
       setCategories(data.categories || []);
-      setLocations(data.locations || []);
-      setSummary(data.summary || {});
     } catch (error) {
       console.error('Error loading equipment:', error);
     } finally {
@@ -126,24 +358,118 @@ export default function Equipment() {
     loadData();
   }, [loadData]);
 
+  // Sorting function
+  const handleSort = (field: keyof Equipment) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Inline editing functions
+  const startEditing = (serial_number: string, field: string, currentValue: string) => {
+    setEditingCell({ serial_number, field });
+    setEditingValue(currentValue || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingCell(null);
+    setEditingValue('');
+  };
+
+  const saveEdit = async () => {
+    if (!editingCell) return;
+
+    try {
+      const response = await fetch('/api/equipment', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serial_number: editingCell.serial_number,
+          [editingCell.field]: editingValue
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update equipment');
+      }
+
+      await loadData();
+      setEditingCell(null);
+      setEditingValue('');
+    } catch (error) {
+      console.error('Error updating equipment:', error);
+      alert('Failed to update equipment');
+    }
+  };
+
+  // Filter and sort equipment
+  const filteredAndSortedEquipment = useMemo(() => {
+    let filtered = equipment.filter(item => {
+      const matchesCategory = selectedCategory === 'all' || item.category_id === selectedCategory;
+      const matchesLocation = selectedLocation === 'all' || 
+        (item.current_location || item.location_id) === selectedLocation;
+      const matchesStatus = selectedStatus === 'all' || item.status === selectedStatus;
+      const matchesSearch = searchTerm === '' || 
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.equipment_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.model?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      return matchesCategory && matchesLocation && matchesStatus && matchesSearch;
+    });
+
+    // Apply sorting
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let aValue = a[sortField];
+        let bValue = b[sortField];
+        
+        // Handle null/undefined values
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return sortDirection === 'asc' ? 1 : -1;
+        if (bValue == null) return sortDirection === 'asc' ? -1 : 1;
+        
+        // Handle dates
+        if (sortField === 'next_calibration_due' || sortField === 'warranty_expiry' || sortField === 'purchase_date') {
+          aValue = new Date(aValue as string).getTime();
+          bValue = new Date(bValue as string).getTime();
+        }
+        
+        // Handle strings (case insensitive)
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+        
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [equipment, selectedCategory, selectedLocation, selectedStatus, searchTerm, sortField, sortDirection]);
+
   // Filter equipment
-  const filteredEquipment = equipment.filter(item => {
-    const matchesCategory = selectedCategory === 'all' || item.category_id === selectedCategory;
-    const matchesLocation = selectedLocation === 'all' || item.location_id === selectedLocation;
-    const matchesStatus = selectedStatus === 'all' || item.status === selectedStatus;
-    const matchesSearch = searchTerm === '' || 
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.equipment_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.model?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    return matchesCategory && matchesLocation && matchesStatus && matchesSearch;
+  const filteredEquipment = filteredAndSortedEquipment;
+
+  // Filter equipment for Gantt chart (use end dates or calibration dates)
+  const equipmentWithDates = filteredEquipment.filter(item => {
+    const hasEndDate = item.warranty_expiry && new Date(item.warranty_expiry) > new Date();
+    const hasCalibrationDate = item.next_calibration_due && new Date(item.next_calibration_due) > new Date();
+    return hasEndDate || hasCalibrationDate;
   });
 
-  // Add equipment
+  // Add equipment - serial_number is now required
   const addEquipment = useCallback(async () => {
-    if (!newEquipment.equipment_id.trim() || !newEquipment.name.trim() || 
-        !newEquipment.category_id || !newEquipment.location_id) return;
+    if (!newEquipment.serial_number.trim() || !newEquipment.name.trim() || 
+        !newEquipment.category_id || !newEquipment.location_id) {
+      alert('Serial number, name, category, and location are required');
+      return;
+    }
 
     try {
       const response = await fetch('/api/equipment', {
@@ -163,8 +489,8 @@ export default function Equipment() {
 
       await loadData();
       setNewEquipment({
-        equipment_id: '', name: '', category_id: '', manufacturer: '', model: '',
-        serial_number: '', purchase_date: '', purchase_cost: '', warranty_expiry: '',
+        serial_number: '', equipment_id: '', name: '', category_id: '', manufacturer: '', model: '',
+        purchase_date: '', purchase_cost: '', warranty_expiry: '',
         location_id: '', status: 'active', condition_rating: '', notes: ''
       });
       setShowAddModal(false);
@@ -269,6 +595,39 @@ export default function Equipment() {
     }
   };
 
+  // Handle PDF upload for equipment attachments
+  const handlePDFUpload = async (file: File, equipment: Equipment) => {
+    if (!file || !equipment.serial_number || !equipment.equipment_id) {
+      alert('Missing required information for upload');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('equipment_id', equipment.equipment_id);
+    formData.append('serial_number', equipment.serial_number);
+    formData.append('description', `PDF attachment for ${equipment.name}`);
+
+    try {
+      const response = await fetch('/api/equipment-attachments', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('PDF uploaded successfully!');
+        // You could refresh attachments list here
+      } else {
+        alert(`Upload failed: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('PDF upload error:', error);
+      alert('Failed to upload PDF. Please try again.');
+    }
+  };
+
   // Get status color
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -286,6 +645,96 @@ export default function Equipment() {
     if (rating >= 4) return 'bg-green-100 text-green-800';
     if (rating >= 3) return 'bg-yellow-100 text-yellow-800';
     return 'bg-red-100 text-red-800';
+  };
+
+  // Sortable header component
+  const SortableHeader = ({ field, children, className = "" }: { 
+    field: keyof Equipment; 
+    children: React.ReactNode; 
+    className?: string;
+  }) => (
+    <th 
+      scope="col" 
+      className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 ${className}`}
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center space-x-1">
+        <span>{children}</span>
+        {sortField === field && (
+          <span className="text-gray-400">
+            {sortDirection === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </div>
+    </th>
+  );
+
+  // Editable cell component for dates
+  const EditableCell = ({ 
+    value, 
+    serial_number, 
+    field, 
+    type = "text",
+    className = ""
+  }: {
+    value: string | null | undefined;
+    serial_number: string;
+    field: string;
+    type?: string;
+    className?: string;
+  }) => {
+    const isEditing = editingCell?.serial_number === serial_number && editingCell?.field === field;
+    
+    if (isEditing) {
+      return (
+        <div className="flex items-center space-x-2">
+          <input
+            type={type}
+            value={editingValue}
+            onChange={(e) => setEditingValue(e.target.value)}
+            className="text-sm border border-gray-300 rounded px-2 py-1 w-full"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveEdit();
+              if (e.key === 'Escape') cancelEditing();
+            }}
+            autoFocus
+          />
+          <button
+            onClick={saveEdit}
+            className="text-green-600 hover:text-green-800 text-xs"
+          >
+            ✓
+          </button>
+          <button
+            onClick={cancelEditing}
+            className="text-red-600 hover:text-red-800 text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      );
+    }
+
+    const displayValue = type === 'date' ? formatDate(value) : (value || 'N/A');
+    const editableValue = type === 'date' && value ? value.split('T')[0] : (value || ''); // Format for date input
+    
+    return (
+      <div 
+        className={`cursor-pointer hover:bg-gray-50 rounded px-2 py-1 border border-transparent hover:border-gray-300 transition-colors ${className}`}
+        onClick={() => startEditing(serial_number, field, editableValue)}
+        title={`Click to edit ${field.replace('_', ' ')}`}
+      >
+        <div className="flex items-center justify-between">
+          <span>{displayValue}</span>
+          <span className="text-gray-400 text-xs opacity-0 group-hover:opacity-100 ml-2">✏️</span>
+        </div>
+        {type === 'date' && field === 'next_calibration_due' && value && (
+          <div className="text-xs mt-1">
+            {getCalibrationStatus(value).status}
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
@@ -314,6 +763,13 @@ export default function Equipment() {
               </div>
               <div className="flex gap-3">
                 <button
+                  onClick={loadData}
+                  disabled={loading}
+                  className="bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  🔄 {loading ? 'Refreshing...' : 'Refresh'}
+                </button>
+                <button
                   onClick={() => setShowUploadModal(true)}
                   className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
                 >
@@ -330,7 +786,7 @@ export default function Equipment() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
@@ -395,7 +851,7 @@ export default function Equipment() {
                   </div>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-500">Cal. Due</p>
+                  <p className="text-sm font-medium text-gray-500" title="Calibration due within 30 days">Cal. Due</p>
                   <p className="text-lg font-semibold text-gray-900">{summary.calibrationDueSoon}</p>
                 </div>
               </div>
@@ -409,8 +865,22 @@ export default function Equipment() {
                   </div>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-500">Overdue</p>
+                  <p className="text-sm font-medium text-gray-500" title="Calibration overdue">Overdue</p>
                   <p className="text-lg font-semibold text-gray-900">{summary.overdueCalibrations}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                    <span className="text-red-600 font-semibold">❌</span>
+                  </div>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm font-medium text-gray-500">Lost</p>
+                  <p className="text-lg font-semibold text-gray-900">{summary.lost}</p>
                 </div>
               </div>
             </div>
@@ -454,11 +924,14 @@ export default function Equipment() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Locations</option>
-                  {locations.map(location => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
+                  {/* Generate location options from actual equipment locations */}
+                  {Array.from(new Set(equipment.map(item => item.current_location || item.location_id).filter(Boolean)))
+                    .sort()
+                    .map(location => (
+                      <option key={location} value={location}>
+                        {location}
+                      </option>
+                    ))}
                 </select>
               </div>
 
@@ -479,94 +952,144 @@ export default function Equipment() {
             </div>
           </div>
 
-          {/* Equipment List */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200">
+          {/* View Toggle */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+            <div className="flex justify-between items-center">
               <h2 className="text-lg font-medium text-gray-900">
                 Equipment ({filteredEquipment.length})
               </h2>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'table' 
+                      ? 'bg-white text-gray-900 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  📋 Table View
+                </button>
+                <button
+                  onClick={() => setViewMode('gantt')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'gantt' 
+                      ? 'bg-white text-gray-900 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  📊 Gantt Chart
+                </button>
+              </div>
             </div>
+          </div>
+
+          {/* Equipment List */}
+          {viewMode === 'table' ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium text-gray-900">Equipment Table</h3>
+                  <div className="text-sm text-gray-500">
+                    💡 Click column headers to sort • Click dates to edit inline
+                  </div>
+                </div>
+              </div>
             
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Equipment
+                    <SortableHeader field="serial_number">Serial Number</SortableHeader>
+                    <SortableHeader field="equipment_id">Equipment ID</SortableHeader>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Equipment Details
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Category
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Condition
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <SortableHeader field="name">Name</SortableHeader>
+                    <SortableHeader field="next_calibration_due">Calibration Due</SortableHeader>
+                    <SortableHeader field="warranty_expiry">Off Hire Date</SortableHeader>
+                    <SortableHeader field="location_id">Location</SortableHeader>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredEquipment.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50">
+                    <tr key={item.serial_number} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {item.equipment_id}
-                          </div>
-                          <div className="text-sm text-gray-500">{item.name}</div>
-                          {item.manufacturer && (
-                            <div className="text-xs text-gray-400">
-                              {item.manufacturer} {item.model}
-                            </div>
-                          )}
+                        <Link 
+                          href={`/equipment/${encodeURIComponent(item.serial_number)}`}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-900 hover:underline"
+                        >
+                          {item.serial_number}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">
+                          {item.equipment_id || 'N/A'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <span className="mr-2">{item.category?.icon}</span>
-                          <span className="text-sm text-gray-900">{item.category?.name}</span>
+                        <div className="text-sm text-gray-900">
+                          {item.manufacturer} {item.model}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{item.location?.name}</div>
-                        {item.location?.address && (
-                          <div className="text-xs text-gray-500">{item.location.address}</div>
-                        )}
+                        <div className="text-sm text-gray-900">{item.name}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(item.status)}`}>
-                          {item.status}
-                        </span>
+                        <EditableCell
+                          value={item.next_calibration_due}
+                          serial_number={item.serial_number}
+                          field="next_calibration_due"
+                          type="date"
+                          className={(() => {
+                            const calibrationStatus = getCalibrationStatus(item.next_calibration_due);
+                            return `text-sm px-2 py-1 rounded-md ${calibrationStatus.bgColor} ${calibrationStatus.color}`;
+                          })()}
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {item.condition_rating && (
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getConditionColor(item.condition_rating)}`}>
-                            {item.condition_rating}/5
-                          </span>
-                        )}
+                        <EditableCell
+                          value={item.warranty_expiry}
+                          serial_number={item.serial_number}
+                          field="warranty_expiry"
+                          type="date"
+                          className="text-sm text-gray-900"
+                        />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => {
-                            setEditingEquipment(item);
-                            setShowEditModal(true);
-                          }}
-                          className="text-blue-600 hover:text-blue-900 mr-3"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => deleteEquipment(item.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {formatLocation(item.current_location || item.location_id)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <Link 
+                            href={`/equipment/${encodeURIComponent(item.serial_number)}`}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            View
+                          </Link>
+                          <button
+                            onClick={() => {
+                              setEditingEquipment(item);
+                              setShowEditModal(true);
+                            }}
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedEquipmentForAttachment(item);
+                              setShowAttachmentModal(true);
+                            }}
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            Files
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -584,6 +1107,19 @@ export default function Equipment() {
               )}
             </div>
           </div>
+          ) : (
+            /* Gantt Chart View */
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Equipment Deployment Timeline</h3>
+                <p className="text-sm text-gray-600 mt-1">Shows equipment deployment periods based on project end dates</p>
+              </div>
+              
+              <div className="p-6">
+                <GanttChart equipment={equipmentWithDates} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -595,13 +1131,25 @@ export default function Equipment() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Equipment ID *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number *</label>
+                <input
+                  type="text"
+                  value={newEquipment.serial_number}
+                  onChange={(e) => setNewEquipment({...newEquipment, serial_number: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., AQ2000-001"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Equipment ID</label>
                 <input
                   type="text"
                   value={newEquipment.equipment_id}
                   onChange={(e) => setNewEquipment({...newEquipment, equipment_id: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., MON-001"
+                  placeholder="e.g., MON-001 (optional)"
                 />
               </div>
               
@@ -613,6 +1161,7 @@ export default function Equipment() {
                   onChange={(e) => setNewEquipment({...newEquipment, name: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Equipment name"
+                  required
                 />
               </div>
               
@@ -634,18 +1183,14 @@ export default function Equipment() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
-                <select
+                <input
+                  type="text"
                   value={newEquipment.location_id}
                   onChange={(e) => setNewEquipment({...newEquipment, location_id: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select location</option>
-                  {locations.map(location => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Enter location (e.g., Office, Warehouse, Site A)"
+                  required
+                />
               </div>
               
               <div>
@@ -664,16 +1209,6 @@ export default function Equipment() {
                   type="text"
                   value={newEquipment.model}
                   onChange={(e) => setNewEquipment({...newEquipment, model: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
-                <input
-                  type="text"
-                  value={newEquipment.serial_number}
-                  onChange={(e) => setNewEquipment({...newEquipment, serial_number: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -736,16 +1271,16 @@ export default function Equipment() {
               />
             </div>
             
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex justify-end space-x-3 mt-6">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
               >
                 Cancel
               </button>
               <button
                 onClick={addEquipment}
-                className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
               >
                 Add Equipment
               </button>
@@ -838,6 +1373,81 @@ export default function Equipment() {
                 className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 {uploading ? 'Uploading...' : 'Upload'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Attachment Modal */}
+      {showAttachmentModal && selectedEquipmentForAttachment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">
+                PDF Attachments - {selectedEquipmentForAttachment.serial_number}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAttachmentModal(false);
+                  setSelectedEquipmentForAttachment(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <h3 className="text-lg font-medium mb-2">Equipment Details</h3>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div><strong>Name:</strong> {selectedEquipmentForAttachment.name}</div>
+                  <div><strong>Serial:</strong> {selectedEquipmentForAttachment.serial_number}</div>
+                  <div><strong>Current Location:</strong> {selectedEquipmentForAttachment.current_location || selectedEquipmentForAttachment.location?.name}</div>
+                  <div><strong>Status:</strong> <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(selectedEquipmentForAttachment.status)}`}>{selectedEquipmentForAttachment.status}</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-lg font-medium mb-2">Upload New PDF</h3>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handlePDFUpload(file, selectedEquipmentForAttachment);
+                    }
+                  }}
+                  className="w-full"
+                />
+                <p className="text-sm text-gray-500 mt-2">
+                  Select a PDF file to upload (max 10MB)
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium mb-2">Existing Attachments</h3>
+              <div className="space-y-2">
+                <div className="text-sm text-gray-500">
+                  📎 No attachments yet. Upload a PDF to get started.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => {
+                  setShowAttachmentModal(false);
+                  setSelectedEquipmentForAttachment(null);
+                }}
+                className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
+              >
+                Close
               </button>
             </div>
           </div>
