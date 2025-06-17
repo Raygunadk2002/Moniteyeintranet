@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
+import AdminAccessControl from '../components/AdminAccessControl';
 
 interface UploadResult {
   success: boolean;
@@ -206,7 +207,8 @@ export default function Admin() {
   };
 
   return (
-    <Layout>
+    <AdminAccessControl moduleName="Admin Dashboard">
+      <Layout>
       <div className="flex-1 bg-gray-50 overflow-y-auto">
         <div className="p-6">
           <div className="bg-white border-b border-gray-200 px-6 py-4 -mx-6 -mt-6 mb-6">
@@ -677,5 +679,6 @@ export default function Admin() {
         </div>
       </div>
     </Layout>
+    </AdminAccessControl>
   );
 } 

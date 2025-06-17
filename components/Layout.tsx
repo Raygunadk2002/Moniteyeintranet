@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 
 interface LayoutProps {
@@ -7,15 +7,56 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
 
-  const navigation = [
+  // Check admin authentication status
+  useEffect(() => {
+    const checkAdminAuth = () => {
+      const adminAuth = localStorage.getItem('admin-authenticated');
+      const authTimestamp = localStorage.getItem('admin-auth-timestamp');
+      
+      if (adminAuth === 'true' && authTimestamp) {
+        const authTime = parseInt(authTimestamp);
+        const currentTime = Date.now();
+        const fourHours = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
+        
+        if (currentTime - authTime < fourHours) {
+          setIsAdminAuthenticated(true);
+        } else {
+          // Admin session expired
+          localStorage.removeItem('admin-authenticated');
+          localStorage.removeItem('admin-auth-timestamp');
+          setIsAdminAuthenticated(false);
+        }
+      } else {
+        setIsAdminAuthenticated(false);
+      }
+    };
+
+    checkAdminAuth();
+    
+    // Check every minute for session expiry
+    const interval = setInterval(checkAdminAuth, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const baseNavigation = [
     { name: "Dashboard", href: "/", icon: "🏠" },
     { name: "Tasks", href: "/tasks", icon: "📋" },
     { name: "Equipment", href: "/equipment", icon: "📊" },
-    { name: "Business Ideas", href: "/business-ideas", icon: "💡" },
     { name: "Calendar", href: "/calendar", icon: "📅" },
-    { name: "Admin", href: "/admin", icon: "⚙️" },
     { name: "About", href: "/about", icon: "ℹ️" },
+  ];
+
+  const adminNavigation = [
+    { name: "Business Ideas", href: "/business-ideas", icon: "💡", adminOnly: true },
+    { name: "Admin", href: "/admin", icon: "⚙️", adminOnly: true },
+  ];
+
+  const navigation = [
+    ...baseNavigation,
+    ...(isAdminAuthenticated ? adminNavigation : [])
   ];
 
   const isActive = (href: string) => {

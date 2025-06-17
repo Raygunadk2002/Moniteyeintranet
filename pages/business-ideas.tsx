@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
+import AdminAccessControl from '../components/AdminAccessControl';
 import BusinessIdeaForm from '../components/BusinessIdeaForm';
 import BusinessIdeaList from '../components/BusinessIdeaList';
 import RevenueModelingEngine from '../components/RevenueModelingEngine';
@@ -97,7 +98,8 @@ export default function BusinessIdeas() {
   };
 
   return (
-    <Layout>
+    <AdminAccessControl moduleName="Business Ideas">
+      <Layout>
       <div className="flex-1 bg-gray-50 overflow-y-auto">
         <div className="p-6">
           <div className="bg-white border-b border-gray-200 px-6 py-4 -mx-6 -mt-6 mb-6">
@@ -179,5 +181,6 @@ export default function BusinessIdeas() {
         </div>
       </div>
     </Layout>
+    </AdminAccessControl>
   );
 } 
