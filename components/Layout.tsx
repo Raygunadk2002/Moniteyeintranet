@@ -12,6 +12,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: "Dashboard", href: "/", icon: "🏠" },
     { name: "Tasks", href: "/tasks", icon: "📋" },
     { name: "Equipment", href: "/equipment", icon: "📊" },
+    { name: "Business Ideas", href: "/business-ideas", icon: "💡" },
     { name: "Calendar", href: "/calendar", icon: "📅" },
     { name: "Admin", href: "/admin", icon: "⚙️" },
     { name: "About", href: "/about", icon: "ℹ️" },
