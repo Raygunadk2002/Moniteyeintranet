@@ -4,6 +4,7 @@ import RoleBasedAccessControl from '../components/RoleBasedAccessControl';
 import BusinessIdeaForm from '../components/BusinessIdeaForm';
 import BusinessIdeaList from '../components/BusinessIdeaList';
 import RevenueModelingEngine from '../components/RevenueModelingEngine';
+import AdvancedBusinessModelingEngine from '../components/AdvancedBusinessModelingEngine';
 
 export interface BusinessIdea {
   id: string;
@@ -17,6 +18,7 @@ export interface BusinessIdea {
   ongoingAnnualCost: number;
   tags: string[];
   revenueModel?: any;
+  advancedModel?: any;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,7 +26,7 @@ export interface BusinessIdea {
 export default function BusinessIdeas() {
   const [ideas, setIdeas] = useState<BusinessIdea[]>([]);
   const [selectedIdea, setSelectedIdea] = useState<BusinessIdea | null>(null);
-  const [activeTab, setActiveTab] = useState<'list' | 'form' | 'modeling'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'form' | 'modeling' | 'advanced'>('list');
   const [editingIdea, setEditingIdea] = useState<BusinessIdea | null>(null);
 
   // Load ideas from localStorage on component mount
@@ -89,10 +91,23 @@ export default function BusinessIdeas() {
     setActiveTab('modeling');
   };
 
+  const handleAdvancedModeling = (idea: BusinessIdea) => {
+    setSelectedIdea(idea);
+    setActiveTab('advanced');
+  };
+
   const handleUpdateRevenueModel = (ideaId: string, revenueModel: any) => {
     setIdeas(prev => prev.map(idea => 
       idea.id === ideaId 
         ? { ...idea, revenueModel, updatedAt: new Date().toISOString() }
+        : idea
+    ));
+  };
+
+  const handleUpdateAdvancedModel = (ideaId: string, advancedModel: any) => {
+    setIdeas(prev => prev.map(idea => 
+      idea.id === ideaId 
+        ? { ...idea, advancedModel, updatedAt: new Date().toISOString() }
         : idea
     ));
   };
@@ -104,7 +119,7 @@ export default function BusinessIdeas() {
         <div className="p-6">
           <div className="bg-white border-b border-gray-200 px-6 py-4 -mx-6 -mt-6 mb-6">
             <h1 className="text-2xl font-semibold text-gray-900">Business Idea Manager</h1>
-            <p className="text-gray-600 mt-1">Capture, evaluate, and model revenue for your business ideas</p>
+            <p className="text-gray-600 mt-1">Capture, evaluate, and model revenue for your business ideas with advanced multi-model forecasting</p>
           </div>
 
           {/* Tab Navigation */}
@@ -134,16 +149,28 @@ export default function BusinessIdeas() {
                 ➕ {editingIdea ? 'Edit Idea' : 'New Idea'}
               </button>
               {selectedIdea && (
-                <button
-                  onClick={() => setActiveTab('modeling')}
-                  className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'modeling'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  📊 Revenue Model: {selectedIdea.name}
-                </button>
+                <>
+                  <button
+                    onClick={() => setActiveTab('modeling')}
+                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'modeling'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    📊 Simple Model: {selectedIdea.name}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('advanced')}
+                    className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'advanced'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    🚀 Advanced Model: {selectedIdea.name}
+                  </button>
+                </>
               )}
             </nav>
           </div>
@@ -156,6 +183,7 @@ export default function BusinessIdeas() {
                 onEdit={handleEditIdea}
                 onDelete={handleDeleteIdea}
                 onModelRevenue={handleModelRevenue}
+                onAdvancedModeling={handleAdvancedModeling}
               />
             )}
 
@@ -174,6 +202,14 @@ export default function BusinessIdeas() {
               <RevenueModelingEngine
                 idea={selectedIdea}
                 onUpdateModel={(revenueModel) => handleUpdateRevenueModel(selectedIdea.id, revenueModel)}
+                onBack={() => setActiveTab('list')}
+              />
+            )}
+
+            {activeTab === 'advanced' && selectedIdea && (
+              <AdvancedBusinessModelingEngine
+                idea={selectedIdea}
+                onUpdateModel={(advancedModel) => handleUpdateAdvancedModel(selectedIdea.id, advancedModel)}
                 onBack={() => setActiveTab('list')}
               />
             )}

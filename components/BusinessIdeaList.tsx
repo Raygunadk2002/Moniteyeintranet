@@ -6,9 +6,10 @@ interface BusinessIdeaListProps {
   onEdit: (idea: BusinessIdea) => void;
   onDelete: (ideaId: string) => void;
   onModelRevenue: (idea: BusinessIdea) => void;
+  onAdvancedModeling: (idea: BusinessIdea) => void;
 }
 
-export default function BusinessIdeaList({ ideas, onEdit, onDelete, onModelRevenue }: BusinessIdeaListProps) {
+export default function BusinessIdeaList({ ideas, onEdit, onDelete, onModelRevenue, onAdvancedModeling }: BusinessIdeaListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterByModel, setFilterByModel] = useState('');
   const [filterByIndustry, setFilterByIndustry] = useState('');
@@ -209,40 +210,65 @@ export default function BusinessIdeaList({ ideas, onEdit, onDelete, onModelReven
               )}
 
               {/* Revenue Model Status */}
-              <div className="mb-4">
-                {idea.revenueModel ? (
-                  <div className="flex items-center text-sm text-green-600">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                    Revenue model created
-                  </div>
-                ) : (
-                  <div className="flex items-center text-sm text-gray-500">
-                    <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
-                    No revenue model yet
-                  </div>
-                )}
+              <div className="mb-4 space-y-1">
+                <div className="flex items-center text-sm">
+                  {idea.revenueModel ? (
+                    <div className="flex items-center text-green-600">
+                      <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                      Simple model created
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-gray-500">
+                      <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+                      No simple model yet
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center text-sm">
+                  {idea.advancedModel ? (
+                    <div className="flex items-center text-purple-600">
+                      <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                      Advanced model created
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-gray-500">
+                      <span className="w-2 h-2 bg-gray-300 rounded-full mr-2"></span>
+                      No advanced model yet
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Actions */}
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => onModelRevenue(idea)}
-                  className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-                >
-                  📊 Model
-                </button>
-                <button
-                  onClick={() => onEdit(idea)}
-                  className="px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={() => onDelete(idea.id)}
-                  className="px-3 py-2 border border-red-300 text-red-700 text-sm rounded-lg hover:bg-red-50"
-                >
-                  🗑️
-                </button>
+              <div className="space-y-2">
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => onModelRevenue(idea)}
+                    className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+                  >
+                    📊 Simple
+                  </button>
+                  <button
+                    onClick={() => onAdvancedModeling(idea)}
+                    className="flex-1 px-3 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700"
+                  >
+                    🚀 Advanced
+                  </button>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => onEdit(idea)}
+                    className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50"
+                  >
+                    ✏️ Edit
+                  </button>
+                  <button
+                    onClick={() => onDelete(idea.id)}
+                    className="flex-1 px-3 py-2 border border-red-300 text-red-700 text-sm rounded-lg hover:bg-red-50"
+                  >
+                    🗑️ Delete
+                  </button>
+                </div>
               </div>
 
               {/* Footer */}
