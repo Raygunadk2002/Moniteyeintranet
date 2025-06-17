@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
+import { useAuth } from "../contexts/AuthContext";
+import { UserRole, hasRole } from "../lib/auth";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -7,39 +9,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-
-  // Check admin authentication status
-  useEffect(() => {
-    const checkAdminAuth = () => {
-      const adminAuth = localStorage.getItem('admin-authenticated');
-      const authTimestamp = localStorage.getItem('admin-auth-timestamp');
-      
-      if (adminAuth === 'true' && authTimestamp) {
-        const authTime = parseInt(authTimestamp);
-        const currentTime = Date.now();
-        const fourHours = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
-        
-        if (currentTime - authTime < fourHours) {
-          setIsAdminAuthenticated(true);
-        } else {
-          // Admin session expired
-          localStorage.removeItem('admin-authenticated');
-          localStorage.removeItem('admin-auth-timestamp');
-          setIsAdminAuthenticated(false);
-        }
-      } else {
-        setIsAdminAuthenticated(false);
-      }
-    };
-
-    checkAdminAuth();
-    
-    // Check every minute for session expiry
-    const interval = setInterval(checkAdminAuth, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  const { user, profile, signOut } = useAuth();
 
   const baseNavigation = [
     { name: "Dashboard", href: "/", icon: "🏠" },
@@ -54,10 +24,20 @@ export default function Layout({ children }: LayoutProps) {
     { name: "Admin", href: "/admin", icon: "⚙️", adminOnly: true },
   ];
 
-  const navigation = [
-    ...baseNavigation,
-    ...(isAdminAuthenticated ? adminNavigation : [])
-  ];
+  // Filter navigation based on user role
+  const getFilteredNavigation = () => {
+    if (!profile) return baseNavigation;
+    
+    const filteredAdmin = adminNavigation.filter(item => {
+      if (item.href === '/admin') return hasRole(profile.role, 'admin');
+      if (item.href === '/business-ideas') return hasRole(profile.role, 'manager');
+      return false;
+    });
+    
+    return [...baseNavigation, ...filteredAdmin];
+  };
+
+  const navigation = getFilteredNavigation();
 
   const isActive = (href: string) => {
     if (href === "/") {
@@ -96,32 +76,48 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">AK</span>
+          {profile ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-medium">
+                    {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : profile.email.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-white text-sm font-medium">
+                    {profile.full_name || profile.email}
+                  </p>
+                  <p className="text-gray-400 text-xs capitalize">
+                    {profile.role}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-white text-sm font-medium">Alex Keal</p>
-                <p className="text-gray-400 text-xs">Admin</p>
-              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    await signOut();
+                    router.push('/auth/login');
+                  } catch (error) {
+                    console.error('Logout failed:', error);
+                  }
+                }}
+                className="text-gray-400 hover:text-white text-xs p-1 rounded hover:bg-gray-700"
+                title="Sign Out"
+              >
+                🚪
+              </button>
             </div>
-            <button
-              onClick={async () => {
-                try {
-                  await fetch('/api/auth/logout', { method: 'POST' });
-                  document.cookie = 'moniteye-auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; samesite=strict';
-                  window.location.href = '/login';
-                } catch (error) {
-                  console.error('Logout failed:', error);
-                }
-              }}
-              className="text-gray-400 hover:text-white text-xs p-1 rounded hover:bg-gray-700"
-              title="Logout"
-            >
-              🚪
-            </button>
-          </div>
+          ) : (
+            <div className="text-center">
+              <a
+                href="/auth/login"
+                className="text-blue-400 hover:text-blue-300 text-sm font-medium"
+              >
+                🔑 Sign In
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
