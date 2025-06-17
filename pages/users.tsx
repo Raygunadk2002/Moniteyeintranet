@@ -101,8 +101,8 @@ export default function Users() {
 
   return (
     <Layout>
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
-        <div className="max-w-4xl mx-auto">
+      <div className="bg-gray-50 py-8 px-4">
+        <div className="max-w-6xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-6">User Management</h1>
             
@@ -189,101 +189,118 @@ export default function Users() {
                 </div>
               )}
             </div>
-
-            {/* Manual Creation Instructions */}
-            <div className="mb-8 p-6 bg-yellow-50 rounded-lg border border-yellow-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">📝 Manual User Creation (Alternative)</h3>
-              <p className="text-sm text-gray-700 mb-3">
-                If automatic creation fails, you can create users manually in Supabase:
-              </p>
-              <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
-                <li>Go to <strong>Supabase Dashboard → Authentication → Users</strong></li>
-                <li>Click "Create new user"</li>
-                <li>Enter email and password</li>
-                <li>Go to <strong>Database → profiles table</strong></li>
-                <li>Click "Insert row" and fill in:
-                  <ul className="ml-6 mt-1 space-y-1 list-disc list-inside">
-                    <li><code>id</code>: Copy from auth.users table</li>
-                    <li><code>email</code>: Same as auth user</li>
-                    <li><code>full_name</code>: User's full name</li>
-                    <li><code>role</code>: admin, manager, employee, or guest</li>
-                    <li><code>department</code>: Optional department</li>
-                    <li><code>is_active</code>: true</li>
-                  </ul>
-                </li>
-              </ol>
-            </div>
             
             {/* Users List */}
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Current Users</h2>
+            <div className="mb-8">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Current Users ({users.length})</h2>
               
               {loading ? (
-                <div className="text-center py-4">Loading users...</div>
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-2 text-gray-600">Loading users...</p>
+                </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-white border border-gray-300">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Email
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Name
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Role
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Department
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {users.map((user, index) => (
-                        <tr key={index}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {user.email}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {user.name}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                              user.role === 'manager' ? 'bg-blue-100 text-blue-800' :
-                              user.role === 'employee' ? 'bg-green-100 text-green-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {user.role}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {user.department || '-'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {user.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Email
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Name
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Role
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Department
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Created
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {users.map((user, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {user.email}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {user.name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                user.role === 'admin' ? 'bg-red-100 text-red-800' :
+                                user.role === 'manager' ? 'bg-blue-100 text-blue-800' :
+                                user.role === 'employee' ? 'bg-green-100 text-green-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {user.role}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {user.department || '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {user.created}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>
+                                {user.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   
                   {users.length === 0 && (
-                    <div className="text-center py-4 text-gray-500">
-                      No users found
+                    <div className="text-center py-8 text-gray-500">
+                      <div className="text-4xl mb-2">👥</div>
+                      <p>No users found</p>
+                      <p className="text-sm">Create your first user above</p>
                     </div>
                   )}
                 </div>
               )}
             </div>
+
+            {/* Manual Creation Instructions - Collapsible */}
+            <details className="mb-4">
+              <summary className="cursor-pointer p-4 bg-yellow-50 rounded-lg border border-yellow-200 hover:bg-yellow-100 transition-colors">
+                <span className="font-medium text-gray-900">📝 Manual User Creation (Alternative Method)</span>
+              </summary>
+              <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="text-sm text-gray-700 mb-3">
+                  If automatic creation fails, you can create users manually in Supabase:
+                </p>
+                <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
+                  <li>Go to <strong>Supabase Dashboard → Authentication → Users</strong></li>
+                  <li>Click "Create new user"</li>
+                  <li>Enter email and password</li>
+                  <li>Go to <strong>Database → profiles table</strong></li>
+                  <li>Click "Insert row" and fill in:
+                    <ul className="ml-6 mt-1 space-y-1 list-disc list-inside">
+                      <li><code>id</code>: Copy from auth.users table</li>
+                      <li><code>email</code>: Same as auth user</li>
+                      <li><code>full_name</code>: User's full name</li>
+                      <li><code>role</code>: admin, manager, employee, or guest</li>
+                      <li><code>department</code>: Optional department</li>
+                      <li><code>is_active</code>: true</li>
+                    </ul>
+                  </li>
+                </ol>
+              </div>
+            </details>
           </div>
         </div>
       </div>

@@ -6,7 +6,7 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [authMode, setAuthMode] = useState<'password' | 'user'>('password')
+  const [authMode, setAuthMode] = useState<'password' | 'user'>('user')
   const router = useRouter()
 
   // Check if already authenticated
@@ -48,6 +48,12 @@ export default function Login() {
         // Store user data if available
         if (data.user) {
           localStorage.setItem('moniteye-user', JSON.stringify(data.user))
+          
+          // Show temporary password warning if applicable
+          if (data.user.hasTemporaryPassword) {
+            // You might want to redirect to password change page or show a modal
+            console.log('User has temporary password - consider prompting for change')
+          }
         } else {
           // Clear any existing user data for password-only auth
           localStorage.removeItem('moniteye-user')
@@ -78,17 +84,6 @@ export default function Login() {
         <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
           <button
             type="button"
-            onClick={() => setAuthMode('password')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              authMode === 'password'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Password Only
-          </button>
-          <button
-            type="button"
             onClick={() => setAuthMode('user')}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
               authMode === 'user'
@@ -97,6 +92,17 @@ export default function Login() {
             }`}
           >
             User Account
+          </button>
+          <button
+            type="button"
+            onClick={() => setAuthMode('password')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              authMode === 'password'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Quick Access
           </button>
         </div>
 
@@ -114,13 +120,14 @@ export default function Login() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 placeholder="you@moniteye.co.uk"
                 required={authMode === 'user'}
+                autoComplete="email"
               />
             </div>
           )}
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              {authMode === 'password' ? 'Site Password' : 'Password'}
+              {authMode === 'password' ? 'Access Code' : 'Password'}
             </label>
             <input
               id="password"
@@ -128,8 +135,9 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              placeholder={authMode === 'password' ? 'Enter site password' : 'Enter your password'}
+              placeholder={authMode === 'password' ? 'Enter access code' : 'Enter your password'}
               required
+              autoComplete={authMode === 'user' ? 'current-password' : 'off'}
             />
           </div>
 
@@ -160,7 +168,7 @@ export default function Login() {
         {/* Help Text */}
         <div className="mt-6 text-center text-sm text-gray-600">
           {authMode === 'password' ? (
-            <p>Use the shared site password to access the intranet.</p>
+            <p>Use the quick access code for immediate entry.</p>
           ) : (
             <div>
               <p>Sign in with your individual user account.</p>
@@ -171,12 +179,13 @@ export default function Login() {
           )}
         </div>
 
-        {/* Quick Login Hints */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-900 mb-2">Quick Login:</h3>
-          <div className="text-xs text-gray-600 space-y-1">
-            <p><strong>Password Only:</strong> moniteye2024</p>
-            <p><strong>Admin Account:</strong> akeal@moniteye.co.uk / moniteye2024</p>
+        {/* Info Box - More Secure */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="text-sm font-medium text-blue-900 mb-2">🔐 Account Information:</h3>
+          <div className="text-xs text-blue-800 space-y-1">
+            <p><strong>New Users:</strong> Use credentials provided by your admin</p>
+            <p><strong>Existing Users:</strong> Use your email and password to sign in</p>
+            <p><strong>Need Help?</strong> Contact your system administrator</p>
           </div>
         </div>
       </div>
