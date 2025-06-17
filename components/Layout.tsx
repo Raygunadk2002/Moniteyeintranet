@@ -54,14 +54,31 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">AK</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-medium">AK</span>
+              </div>
+              <div>
+                <p className="text-white text-sm font-medium">Alex Keal</p>
+                <p className="text-gray-400 text-xs">Admin</p>
+              </div>
             </div>
-            <div>
-              <p className="text-white text-sm font-medium">Alex Keal</p>
-              <p className="text-gray-400 text-xs">Admin</p>
-            </div>
+            <button
+              onClick={async () => {
+                try {
+                  await fetch('/api/auth/logout', { method: 'POST' });
+                  document.cookie = 'moniteye-auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                  window.location.href = '/login';
+                } catch (error) {
+                  console.error('Logout failed:', error);
+                }
+              }}
+              className="text-gray-400 hover:text-white text-xs p-1 rounded hover:bg-gray-700"
+              title="Logout"
+            >
+              🚪
+            </button>
           </div>
         </div>
       </div>
