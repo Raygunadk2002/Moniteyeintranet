@@ -273,11 +273,11 @@ export default function Admin() {
                       <div className="mt-3">
                         <h4 className="text-sm font-medium text-gray-800 mb-2">Table Status:</h4>
                         <div className="space-y-1">
-                          {databaseStatus.tables.map((table: any, index: number) => (
-                            <div key={index} className="flex items-center justify-between text-xs">
-                              <span className="font-medium">{table.table}</span>
-                              <span className={table.success ? 'text-green-600' : 'text-red-600'}>
-                                {table.success ? '✓ Ready' : '✗ Missing'}
+                          {Object.entries(databaseStatus.tables).map(([tableName, tableInfo]: [string, any]) => (
+                            <div key={tableName} className="flex items-center justify-between text-xs">
+                              <span className="font-medium">{tableName}</span>
+                              <span className={tableInfo.accessible ? 'text-green-600' : 'text-red-600'}>
+                                {tableInfo.accessible ? `✓ Ready (${tableInfo.recordCount} records)` : `✗ ${tableInfo.error || 'Missing'}`}
                               </span>
                             </div>
                           ))}
