@@ -1,5 +1,5 @@
-import { createBrowserClient, createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createBrowserClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 
 export type UserRole = 'admin' | 'manager' | 'employee' | 'guest'
 
@@ -24,19 +24,11 @@ export const getSupabaseClient = () => {
   )
 }
 
-// Server-side auth utilities  
+// Server-side auth utilities (for API routes)
 export const getSupabaseServer = () => {
-  const cookieStore = cookies()
-  return createServerClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-      },
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 }
 
