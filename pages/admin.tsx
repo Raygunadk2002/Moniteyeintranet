@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
-import Layout from '../components/Layout';
-import AdminAccessControl from '../components/AdminAccessControl';
+import { useState, useEffect } from 'react'
+import Layout from '../components/Layout'
 
 interface UploadResult {
   success: boolean;
@@ -15,6 +14,13 @@ interface UploadResult {
   suggestions?: string[];
 }
 
+interface DatabaseStatus {
+  success: boolean;
+  message: string;
+  instructions?: string[];
+  tables?: Record<string, { accessible: boolean; recordCount?: number; error?: string }>;
+}
+
 interface CustomKPI {
   id: string;
   title: string;
@@ -24,40 +30,61 @@ interface CustomKPI {
 }
 
 export default function Admin() {
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [result, setResult] = useState<UploadResult | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus | null>(null);
   const [testingDatabase, setTestingDatabase] = useState(false);
-  const [databaseStatus, setDatabaseStatus] = useState<any>(null);
-  
-  // Custom KPI Management
-  const [customKPIs, setCustomKPIs] = useState<CustomKPI[]>([
-    { id: '1', title: '', value: '', emoji: '📊', enabled: false },
-    { id: '2', title: '', value: '', emoji: '💰', enabled: false }
-  ]);
-  const [isClient, setIsClient] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info');
+  const [message, setMessage] = useState('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userDatabaseStatus, setUserDatabaseStatus] = useState<any>(null);
+  const [settingUpUserDatabase, setSettingUpUserDatabase] = useState(false);
 
-  // Load custom KPIs from localStorage after component mounts (client-side only)
+  // Default custom KPIs
+  const defaultKPIs: CustomKPI[] = [
+    { id: 'custom1', title: '', value: '', emoji: '📊', enabled: false },
+    { id: 'custom2', title: '', value: '', emoji: '🎯', enabled: false }
+  ];
+
+  const [customKPIs, setCustomKPIs] = useState<CustomKPI[]>(defaultKPIs);
+
+  // Check authentication and admin access
   useEffect(() => {
-    setIsClient(true);
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('customKPIs');
-      if (stored) {
-        try {
-          const parsedKPIs = JSON.parse(stored);
-          setCustomKPIs(parsedKPIs);
-        } catch (error) {
-          console.warn('Failed to load custom KPIs from localStorage:', error);
+      const userData = localStorage.getItem('moniteye-user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        setCurrentUser(user);
+        if (user.role !== 'admin') {
+          // Redirect non-admin users
+          window.location.href = '/';
+          return;
         }
+      } else {
+        // Redirect non-authenticated users
+        window.location.href = '/login';
+        return;
+      }
+      setIsLoading(false);
+    }
+
+    // Load custom KPIs from localStorage
+    const savedKPIs = localStorage.getItem('moniteye-custom-kpis');
+    if (savedKPIs) {
+      try {
+        setCustomKPIs(JSON.parse(savedKPIs));
+      } catch (error) {
+        console.error('Error loading custom KPIs:', error);
       }
     }
   }, []);
 
   const saveCustomKPIs = (kpis: CustomKPI[]) => {
     setCustomKPIs(kpis);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('customKPIs', JSON.stringify(kpis));
-    }
+    localStorage.setItem('moniteye-custom-kpis', JSON.stringify(kpis));
   };
 
   const handleCustomKPIChange = (id: string, field: keyof CustomKPI, value: string | boolean) => {
@@ -69,26 +96,48 @@ export default function Admin() {
 
   const resetCustomKPI = (id: string) => {
     const updatedKPIs = customKPIs.map(kpi => 
-      kpi.id === id ? { ...kpi, title: '', value: '', emoji: '📊', enabled: false } : kpi
+      kpi.id === id ? { ...kpi, title: '', value: '', emoji: kpi.id === 'custom1' ? '📊' : '🎯', enabled: false } : kpi
     );
     saveCustomKPIs(updatedKPIs);
   };
 
+  const setupUserDatabase = async () => {
+    setSettingUpUserDatabase(true);
+    setUserDatabaseStatus(null);
+
+    try {
+      const response = await fetch('/api/setup-user-database', {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+      setUserDatabaseStatus(result);
+    } catch (error) {
+      setUserDatabaseStatus({
+        success: false,
+        error: `User database setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+    } finally {
+      setSettingUpUserDatabase(false);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-      setResult(null); // Clear previous results
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setUploadResult(null);
     }
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!selectedFile) return;
 
-    setUploading(true);
-    setResult(null);
+    setIsUploading(true);
+    setUploadResult(null);
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', selectedFile);
 
     try {
       const response = await fetch('/api/upload-revenue', {
@@ -96,33 +145,25 @@ export default function Admin() {
         body: formData,
       });
 
-      const data = await response.json();
+      const result = await response.json();
+      setUploadResult(result);
 
-      if (response.ok) {
-        setResult({
-          success: true,
-          message: data.message,
-          recordsProcessed: data.recordsProcessed,
-          monthsGenerated: data.monthsGenerated,
-          totalRevenue: data.totalRevenue,
-          detectedFormat: data.detectedFormat,
-          dateRange: data.dateRange,
-          summary: data.summary,
-        });
-      } else {
-        setResult({
-          success: false,
-          error: data.error,
-          suggestions: data.suggestions,
-        });
+      if (result.success) {
+        // Clear the selected file after successful upload
+        setSelectedFile(null);
+        // Reset the file input
+        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+        if (fileInput) {
+          fileInput.value = '';
+        }
       }
     } catch (error) {
-      setResult({
+      setUploadResult({
         success: false,
-        error: 'Upload failed. Please try again.',
+        error: error instanceof Error ? error.message : 'Upload failed'
       });
     } finally {
-      setUploading(false);
+      setIsUploading(false);
     }
   };
 
@@ -131,29 +172,26 @@ export default function Admin() {
     setDatabaseStatus(null);
 
     try {
-      const response = await fetch('/api/test-supabase');
-      const data = await response.json();
-      setDatabaseStatus(data);
+      const response = await fetch('/api/test-database');
+      const result = await response.json();
+      setDatabaseStatus(result);
     } catch (error) {
       setDatabaseStatus({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        message: `Database test failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       });
     } finally {
       setTestingDatabase(false);
     }
   };
 
-  const [isRunning, setIsRunning] = useState(false);
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState<"success" | "error" | "info">("info");
-
   const runMigration = async () => {
     setIsRunning(true);
-    setMessage("");
-    
+    setMessageType("info");
+    setMessage("🔄 Running migration...");
+
     try {
-      const response = await fetch('/api/migrate-man-days', {
+      const response = await fetch('/api/migrate-equipment-schema', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -161,10 +199,10 @@ export default function Admin() {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         setMessageType("success");
-        setMessage(`✅ Migration completed successfully! ${data.message}`);
+        setMessage(`✅ Migration completed successfully: ${data.message}`);
       } else {
         setMessageType("error");
         setMessage(`❌ Migration failed: ${data.error}`);
@@ -179,10 +217,11 @@ export default function Admin() {
 
   const setupTasksDatabase = async () => {
     setIsRunning(true);
-    setMessage("");
-    
+    setMessageType("info");
+    setMessage("🔄 Setting up tasks database...");
+
     try {
-      const response = await fetch('/api/setup-tasks-database', {
+      const response = await fetch('/api/execute-schema', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -190,36 +229,125 @@ export default function Admin() {
       });
 
       const data = await response.json();
-      
+
       if (data.success) {
         setMessageType("success");
-        setMessage(`✅ Database setup completed successfully!`);
+        setMessage(`✅ Tasks database setup completed: ${data.message}`);
       } else {
         setMessageType("error");
-        setMessage(`❌ Setup failed: ${data.error}`);
+        setMessage(`❌ Tasks database setup failed: ${data.error}`);
       }
     } catch (error) {
       setMessageType("error");
-      setMessage(`❌ Setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setMessage(`❌ Tasks database setup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsRunning(false);
     }
   };
 
-  return (
-    <AdminAccessControl moduleName="Admin Dashboard">
+  // Loading state
+  if (isLoading) {
+    return (
       <Layout>
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading admin panel...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
       <div className="flex-1 bg-gray-50 overflow-y-auto">
         <div className="p-6">
           <div className="bg-white border-b border-gray-200 px-6 py-4 -mx-6 -mt-6 mb-6">
             <h1 className="text-2xl font-semibold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-600 mt-1">Upload invoice data to update revenue trends</p>
+            <p className="text-gray-600 mt-1">System administration and configuration</p>
+            {currentUser && (
+              <div className="mt-2 text-sm text-blue-600">
+                Logged in as {currentUser.name} ({currentUser.role})
+              </div>
+            )}
           </div>
 
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto space-y-8">
+            {/* User Database Setup Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">👥 User Management Setup</h2>
+              
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <h3 className="text-sm font-medium text-blue-800 mb-2">🎯 User Authentication System</h3>
+                  <p className="text-sm text-blue-700">
+                    Set up the user profiles table in Supabase to enable proper user management. 
+                    This will create the necessary database schema and your admin account.
+                  </p>
+                </div>
+
+                <button
+                  onClick={setupUserDatabase}
+                  disabled={settingUpUserDatabase}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {settingUpUserDatabase ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Setting Up User Database...
+                    </>
+                  ) : (
+                    '🚀 Set Up User Database'
+                  )}
+                </button>
+
+                {userDatabaseStatus && (
+                  <div className={`rounded-md p-4 ${userDatabaseStatus.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <h3 className={`text-sm font-medium mb-2 ${userDatabaseStatus.success ? 'text-green-800' : 'text-red-800'}`}>
+                      {userDatabaseStatus.success ? '✅ User Database Ready' : '❌ Setup Failed'}
+                    </h3>
+                    <p className={`text-sm mb-3 ${userDatabaseStatus.success ? 'text-green-700' : 'text-red-700'}`}>
+                      {userDatabaseStatus.message}
+                    </p>
+                    
+                    {userDatabaseStatus.success && userDatabaseStatus.adminCredentials && (
+                      <div className="bg-white border border-green-300 rounded-md p-3 mt-3">
+                        <h4 className="text-sm font-medium text-green-800 mb-2">🔐 Admin Login Credentials</h4>
+                        <div className="text-sm text-green-700">
+                          <p><strong>Email:</strong> {userDatabaseStatus.adminCredentials.email}</p>
+                          <p><strong>Password:</strong> {userDatabaseStatus.adminCredentials.password}</p>
+                        </div>
+                        <p className="text-xs text-green-600 mt-2">
+                          You can now use these credentials to log in with the "User Account" option and access the Users page to create new team members.
+                        </p>
+                      </div>
+                    )}
+
+                    {userDatabaseStatus.profilesTableExists && userDatabaseStatus.adminUserExists && (
+                      <div className="bg-white border border-green-300 rounded-md p-3 mt-3">
+                        <h4 className="text-sm font-medium text-green-800 mb-2">🎉 Next Steps</h4>
+                        <div className="text-sm text-green-700">
+                          <ol className="list-decimal list-inside space-y-1">
+                            <li>Go to the <strong>Users</strong> page from the navigation menu</li>
+                            <li>Click <strong>"+ Add User"</strong> to create new team members</li>
+                            <li>Check the console logs for generated passwords</li>
+                            <li>Share credentials securely with new users</li>
+                          </ol>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Database Setup Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">🔧 Database Setup</h2>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">🔧 Revenue Database Setup</h2>
               
               <div className="space-y-4">
                 <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
@@ -255,44 +383,13 @@ export default function Admin() {
                     <p className={`text-sm mb-3 ${databaseStatus.success ? 'text-green-700' : 'text-red-700'}`}>
                       {databaseStatus.message}
                     </p>
-                    
-                    {!databaseStatus.success && databaseStatus.instructions && (
-                      <div className="bg-white rounded border border-red-300 p-3">
-                        <h4 className="text-sm font-medium text-red-800 mb-2">Setup Instructions:</h4>
-                        <ol className="text-sm text-red-700 list-decimal list-inside space-y-1">
-                          {databaseStatus.instructions.map((instruction: string, index: number) => (
-                            <li key={index}>{instruction}</li>
-                          ))}
-                        </ol>
-                        <div className="mt-3 p-2 bg-gray-100 rounded text-xs font-mono">
-                          <p className="font-medium mb-1">Copy this file to your Supabase SQL Editor:</p>
-                          <p className="text-blue-600">database-schema.sql</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {databaseStatus.tables && (
-                      <div className="mt-3">
-                        <h4 className="text-sm font-medium text-gray-800 mb-2">Table Status:</h4>
-                        <div className="space-y-1">
-                          {Object.entries(databaseStatus.tables).map(([tableName, tableInfo]: [string, any]) => (
-                            <div key={tableName} className="flex items-center justify-between text-xs">
-                              <span className="font-medium">{tableName}</span>
-                              <span className={tableInfo.accessible ? 'text-green-600' : 'text-red-600'}>
-                                {tableInfo.accessible ? `✓ Ready (${tableInfo.recordCount} records)` : `✗ ${tableInfo.error || 'Missing'}`}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
             </div>
 
             {/* Custom KPI Management Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">🎯 Custom KPI Management</h2>
               
               <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
@@ -393,285 +490,168 @@ export default function Admin() {
                 ))}
               </div>
 
-              <div className="mt-6 bg-green-50 border border-green-200 rounded-md p-4">
-                <h3 className="text-sm font-medium text-green-800 mb-2">✅ Quick Setup Tips</h3>
-                <ul className="text-sm text-green-700 space-y-1">
-                  <li>• Enable the toggle to show the KPI tile on your dashboard</li>
-                  <li>• Use clear, descriptive titles (e.g., "Customer Satisfaction", "Team Size")</li>
-                  <li>• Include units in your values (e.g., "98.5%", "£125,000", "42 people")</li>
-                  <li>• Choose relevant emojis that represent your metric (📈, 👥, ⭐, 🎯)</li>
-                  <li>• Changes are saved automatically and appear immediately on the dashboard</li>
-                </ul>
+              <div className="mt-6 p-4 bg-gray-50 rounded-md">
+                <button
+                  onClick={() => saveCustomKPIs(customKPIs)}
+                  className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  💾 Save Custom KPIs
+                </button>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Changes are saved automatically. This button forces a manual save.
+                </p>
               </div>
             </div>
 
-            {/* Upload Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">📊 Upload Invoice Data</h2>
+            {/* Revenue Upload Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-medium text-gray-900 mb-4">📊 Revenue Data Upload</h2>
               
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
-                <h3 className="text-sm font-medium text-blue-800 mb-2">🔍 Smart Auto-Detection Features</h3>
-                <ul className="text-sm text-blue-700 space-y-1">
-                  <li>• <strong>Automatic column detection:</strong> Finds invoice dates and amounts automatically</li>
-                  <li>• <strong>Flexible date formats:</strong> Supports DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, "January 15, 2025", etc.</li>
-                  <li>• <strong>Intelligent grouping:</strong> Groups individual invoices by month and sums totals</li>
-                  <li>• <strong>Multi-language headers:</strong> Recognizes date/amount columns in English, Spanish, and more</li>
-                  <li>• <strong>Flexible layout:</strong> Columns can be in any order (A, B, C, etc.)</li>
-                </ul>
-              </div>
-
               <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <h3 className="text-sm font-medium text-blue-800 mb-2">📋 Supported Formats</h3>
+                  <p className="text-sm text-blue-700 mb-2">
+                    Upload CSV files with revenue data. The system will automatically detect and process various formats.
+                  </p>
+                  <ul className="text-xs text-blue-600 list-disc list-inside space-y-1">
+                    <li>CSV files with Date and Revenue/Amount columns</li>
+                    <li>Automatic date format detection (DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD)</li>
+                    <li>Automatic currency symbol removal (£, $, €)</li>
+                    <li>Monthly aggregation for dashboard display</li>
+                  </ul>
+                </div>
+
                 <div>
                   <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Excel File with Invoice Data
+                    Select CSV File
                   </label>
                   <input
                     id="file-upload"
-                    name="file-upload"
                     type="file"
-                    accept=".xlsx,.xls"
+                    accept=".csv"
                     onChange={handleFileChange}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Upload your Excel file containing individual invoice records with dates and amounts
-                  </p>
                 </div>
 
-                {file && (
-                  <div className="bg-gray-50 rounded-md p-3">
-                    <p className="text-sm text-gray-600">
-                      <strong>Selected file:</strong> {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                {selectedFile && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium">Selected file:</span> {selectedFile.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Size: {(selectedFile.size / 1024).toFixed(1)} KB
                     </p>
                   </div>
                 )}
 
                 <button
                   onClick={handleUpload}
-                  disabled={!file || uploading}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  disabled={!selectedFile || isUploading}
+                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  {uploading ? (
+                  {isUploading ? (
                     <>
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Processing Invoice Data...
+                      Processing...
                     </>
                   ) : (
-                    'Upload & Process Invoices'
+                    'Upload Revenue Data'
                   )}
                 </button>
-              </div>
 
-              {/* Results */}
-              {result && (
-                <div className="mt-6">
-                  {result.success ? (
-                    <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3">
-                          <h3 className="text-sm font-medium text-green-800">✅ {result.message}</h3>
-                          <div className="mt-2 text-sm text-green-700">
-                            <p><strong>Processed:</strong> {result.recordsProcessed} individual invoices</p>
-                            <p><strong>Generated:</strong> {result.monthsGenerated} monthly revenue entries</p>
-                            <p><strong>Total Revenue:</strong> £{result.totalRevenue?.toLocaleString()}</p>
-                            <p><strong>Date Range:</strong> {result.dateRange}</p>
-                            {result.detectedFormat && (
-                              <p><strong>Auto-detected:</strong> {result.detectedFormat}</p>
-                            )}
-                            {result.summary && (
-                              <p className="mt-2 font-medium">{result.summary}</p>
-                            )}
-                          </div>
-                          <div className="mt-3">
-                            <button 
-                              onClick={() => window.location.href = '/'}
-                              className="text-sm bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded-md"
-                            >
-                              View Updated Dashboard →
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3">
-                          <h3 className="text-sm font-medium text-red-800">❌ Upload Failed</h3>
-                          <p className="text-sm text-red-700 mt-1">{result.error}</p>
-                          {result.suggestions && result.suggestions.length > 0 && (
-                            <div className="mt-3">
-                              <p className="text-sm font-medium text-red-800">💡 Suggestions:</p>
-                              <ul className="text-sm text-red-700 mt-1 list-disc list-inside space-y-1">
-                                {result.suggestions.map((suggestion, index) => (
-                                  <li key={index}>{suggestion}</li>
-                                ))}
-                              </ul>
-                            </div>
+                {uploadResult && (
+                  <div className={`rounded-md p-4 ${uploadResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <h3 className={`text-sm font-medium mb-2 ${uploadResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                      {uploadResult.success ? '✅ Upload Successful' : '❌ Upload Failed'}
+                    </h3>
+                    <p className={`text-sm mb-3 ${uploadResult.success ? 'text-green-700' : 'text-red-700'}`}>
+                      {uploadResult.message || uploadResult.error}
+                    </p>
+                    
+                    {uploadResult.success && (
+                      <div className="bg-white border border-green-300 rounded-md p-3 mt-3">
+                        <h4 className="text-sm font-medium text-green-800 mb-2">📊 Processing Summary</h4>
+                        <div className="text-sm text-green-700 space-y-1">
+                          {uploadResult.recordsProcessed && (
+                            <p><strong>Records processed:</strong> {uploadResult.recordsProcessed}</p>
+                          )}
+                          {uploadResult.monthsGenerated && (
+                            <p><strong>Months generated:</strong> {uploadResult.monthsGenerated}</p>
+                          )}
+                          {uploadResult.totalRevenue && (
+                            <p><strong>Total revenue:</strong> £{uploadResult.totalRevenue.toLocaleString()}</p>
+                          )}
+                          {uploadResult.dateRange && (
+                            <p><strong>Date range:</strong> {uploadResult.dateRange}</p>
+                          )}
+                          {uploadResult.detectedFormat && (
+                            <p><strong>Detected format:</strong> {uploadResult.detectedFormat}</p>
                           )}
                         </div>
+                        {uploadResult.summary && (
+                          <div className="mt-2">
+                            <p className="text-xs text-green-600">{uploadResult.summary}</p>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+
+                    {!uploadResult.success && uploadResult.suggestions && (
+                      <div className="bg-white border border-red-300 rounded-md p-3 mt-3">
+                        <h4 className="text-sm font-medium text-red-800 mb-2">💡 Suggestions</h4>
+                        <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
+                          {uploadResult.suggestions.map((suggestion, index) => (
+                            <li key={index}>{suggestion}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Documentation */}
+            {/* System Actions */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">📖 Supported Excel Formats</h2>
-              
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">✅ Date Column Examples:</h3>
-                  <div className="bg-gray-50 rounded-md p-3 text-sm font-mono">
-                    <div className="text-green-600">• 2025-01-15</div>
-                    <div className="text-green-600">• 15/01/2025</div>
-                    <div className="text-green-600">• 01/15/2025</div>
-                    <div className="text-green-600">• January 15, 2025</div>
-                    <div className="text-green-600">• 15 January 2025</div>
-                    <div className="text-green-600">• 15-01-2025</div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">✅ Amount Column Examples:</h3>
-                  <div className="bg-gray-50 rounded-md p-3 text-sm font-mono">
-                    <div className="text-green-600">• 1250.50</div>
-                    <div className="text-green-600">• 850</div>
-                    <div className="text-green-600">• 12500.00</div>
-                    <div className="text-red-600">• £1,250.50 (remove currency)</div>
-                    <div className="text-red-600">• $850.00 (remove currency)</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">🎯 How It Works:</h3>
-                <ol className="text-sm text-gray-600 space-y-2">
-                  <li><strong>1. Upload Individual Invoices:</strong> Each row should contain one invoice with its date and amount</li>
-                  <li><strong>2. Automatic Detection:</strong> System finds date and amount columns using smart content analysis</li>
-                  <li><strong>3. Monthly Grouping:</strong> All invoices are automatically grouped by month (e.g., all January 2025 invoices summed together)</li>
-                  <li><strong>4. Dashboard Update:</strong> Monthly totals are used to create the revenue trend chart</li>
-                  <li><strong>5. Real-time Metrics:</strong> Total revenue and growth calculations update automatically</li>
-                </ol>
-              </div>
-
-              <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                <h3 className="text-sm font-medium text-yellow-800 mb-2">💡 Pro Tips:</h3>
-                <ul className="text-sm text-yellow-700 space-y-1">
-                  <li>• Include headers like "Date", "Invoice Date", "Amount", "Value" for best detection</li>
-                  <li>• Remove currency symbols (£, $, €) from amount columns</li>
-                  <li>• Ensure dates are in a consistent format within the same column</li>
-                  <li>• Use separate columns for dates and amounts (don't combine in one cell)</li>
-                  <li>• System handles mixed date formats and flexible column orders automatically</li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Database Management Section */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Database Management</h2>
+              <h2 className="text-lg font-medium text-gray-900 mb-4">⚙️ System Actions</h2>
               
               <div className="space-y-4">
-                <div className="border rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Setup Tasks Database</h3>
-                  <p className="text-gray-600 mb-4">
-                    Initialize the tasks database with default columns and sample data.
-                  </p>
-                  <button
-                    onClick={setupTasksDatabase}
-                    disabled={isRunning}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    {isRunning ? "Setting up..." : "Setup Tasks Database"}
-                  </button>
-                </div>
+                {message && (
+                  <div className={`rounded-md p-4 ${
+                    messageType === 'success' ? 'bg-green-50 border border-green-200' :
+                    messageType === 'error' ? 'bg-red-50 border border-red-200' :
+                    'bg-blue-50 border border-blue-200'
+                  }`}>
+                    <p className={`text-sm ${
+                      messageType === 'success' ? 'text-green-700' :
+                      messageType === 'error' ? 'text-red-700' :
+                      'text-blue-700'
+                    }`}>
+                      {message}
+                    </p>
+                  </div>
+                )}
 
-                <div className="border rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Add Man Days Migration</h3>
-                  <p className="text-gray-600 mb-4">
-                    Add the "man_days" column to the tasks table to track estimated work duration for each task.
-                  </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <button
                     onClick={runMigration}
                     disabled={isRunning}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    className="flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
-                    {isRunning ? "Running Migration..." : "Run Man Days Migration"}
+                    {isRunning ? 'Running...' : '🔄 Run Equipment Migration'}
                   </button>
-                </div>
-              </div>
 
-              {message && (
-                <div className={`mt-4 p-4 rounded-lg ${
-                  messageType === 'success' ? 'bg-green-50 text-green-800 border border-green-200' :
-                  messageType === 'error' ? 'bg-red-50 text-red-800 border border-red-200' :
-                  'bg-blue-50 text-blue-800 border border-blue-200'
-                }`}>
-                  {message}
-                </div>
-              )}
-            </div>
-
-            {/* Quick Links Section */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">Quick Links</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <a
-                  href="/tasks"
-                  className="p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-                >
-                  <h3 className="font-semibold text-blue-800">📋 Tasks</h3>
-                  <p className="text-sm text-blue-600">Manage project tasks</p>
-                </a>
-                <a
-                  href="/calendar"
-                  className="p-4 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
-                >
-                  <h3 className="font-semibold text-green-800">📅 Calendar</h3>
-                  <p className="text-sm text-green-600">View team calendars</p>
-                </a>
-                <a
-                  href="/equipment"
-                  className="p-4 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
-                >
-                  <h3 className="font-semibold text-purple-800">🔧 Equipment</h3>
-                  <p className="text-sm text-purple-600">Manage equipment inventory</p>
-                </a>
-              </div>
-            </div>
-
-            {/* Feature Info Section */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-4">New Features</h2>
-              <div className="space-y-4">
-                <div className="border-l-4 border-blue-500 pl-4">
-                  <h3 className="font-semibold text-gray-800">Man Days Tracking</h3>
-                  <p className="text-gray-600">
-                    Tasks now support estimated man days to help with project planning and resource allocation. 
-                    The man days are displayed on each task card and totaled at the column level.
-                  </p>
-                </div>
-                <div className="border-l-4 border-green-500 pl-4">
-                  <h3 className="font-semibold text-gray-800">Enhanced Task Cards</h3>
-                  <p className="text-gray-600">
-                    Task cards now show man days estimation alongside priority and assignee information.
-                    Column headers display the total man days for all tasks in that column.
-                  </p>
+                  <button
+                    onClick={setupTasksDatabase}
+                    disabled={isRunning}
+                    className="flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    {isRunning ? 'Setting up...' : '📋 Setup Tasks Database'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -679,6 +659,5 @@ export default function Admin() {
         </div>
       </div>
     </Layout>
-    </AdminAccessControl>
   );
 } 

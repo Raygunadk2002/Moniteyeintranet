@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+// Temporarily disabled Supabase middleware since AuthProvider is disabled
+// import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(request: NextRequest) {
   // Skip middleware for API routes, static files, and auth pages
@@ -20,6 +21,8 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  // Temporarily disabled Supabase auth check - only use old auth system
+  /*
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -71,13 +74,14 @@ export async function middleware(request: NextRequest) {
 
   // If no user, check for old auth system as fallback
   if (!user) {
+  */
     const authCookie = request.cookies.get('moniteye-auth')
     
     if (!authCookie || authCookie.value !== 'authenticated') {
-      // Redirect to new auth page
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      // Redirect to old login page instead of auth/login
+      return NextResponse.redirect(new URL('/login', request.url))
     }
-  }
+  // }
 
   return response
 }

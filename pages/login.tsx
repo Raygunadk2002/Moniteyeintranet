@@ -3,8 +3,10 @@ import { useRouter } from 'next/router'
 
 export default function Login() {
   const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [authMode, setAuthMode] = useState<'password' | 'user'>('password')
   const router = useRouter()
 
   // Check if already authenticated
@@ -31,66 +33,111 @@ export default function Login() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({
+          password,
+          email: authMode === 'user' ? email : undefined
+        }),
       })
 
       const data = await response.json()
 
-      if (data.success) {
-        // Set authentication cookie (adapt secure setting based on protocol)
-        const isSecure = window.location.protocol === 'https:'
-        document.cookie = `moniteye-auth=authenticated; path=/; max-age=86400; ${isSecure ? 'secure;' : ''} samesite=strict`
+      if (response.ok && data.success) {
+        // Set authentication cookie
+        document.cookie = 'moniteye-auth=authenticated; path=/; max-age=86400'
         
+        // Store user data if available
+        if (data.user) {
+          localStorage.setItem('moniteye-user', JSON.stringify(data.user))
+        } else {
+          // Clear any existing user data for password-only auth
+          localStorage.removeItem('moniteye-user')
+        }
+
         // Redirect to dashboard
         router.push('/')
       } else {
-        setError(data.error || 'Invalid password')
+        setError(data.error || 'Authentication failed')
       }
     } catch (error) {
-      setError('Login failed. Please try again.')
+      console.error('Login error:', error)
+      setError('Network error. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <div className="mx-auto h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center">
-            <span className="text-white text-2xl font-bold">M</span>
-          </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Moniteye Intranet
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Enter the password to access the dashboard
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Moniteye Intranet</h1>
+          <p className="text-gray-600">Welcome back! Please sign in to continue.</p>
         </div>
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+
+        {/* Authentication Mode Toggle */}
+        <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
+          <button
+            type="button"
+            onClick={() => setAuthMode('password')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              authMode === 'password'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Password Only
+          </button>
+          <button
+            type="button"
+            onClick={() => setAuthMode('user')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              authMode === 'user'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            User Account
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {authMode === 'user' && (
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="you@moniteye.co.uk"
+                required={authMode === 'user'}
+              />
+            </div>
+          )}
+
           <div>
-            <label htmlFor="password" className="sr-only">
-              Password
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              {authMode === 'password' ? 'Site Password' : 'Password'}
             </label>
             <input
               id="password"
-              name="password"
               type="password"
-              required
-              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-              placeholder="Enter password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              placeholder={authMode === 'password' ? 'Enter site password' : 'Enter your password'}
+              required
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-3">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -101,32 +148,37 @@ export default function Login() {
             </div>
           )}
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Signing in...
-                </>
-              ) : (
-                'Sign in'
-              )}
-            </button>
-          </div>
-
-          <div className="text-center">
-            <p className="text-xs text-gray-500">
-              Protected by password authentication
-            </p>
-          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
         </form>
+
+        {/* Help Text */}
+        <div className="mt-6 text-center text-sm text-gray-600">
+          {authMode === 'password' ? (
+            <p>Use the shared site password to access the intranet.</p>
+          ) : (
+            <div>
+              <p>Sign in with your individual user account.</p>
+              <p className="mt-1">
+                Don't have an account? Contact your administrator.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Quick Login Hints */}
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="text-sm font-medium text-gray-900 mb-2">Quick Login:</h3>
+          <div className="text-xs text-gray-600 space-y-1">
+            <p><strong>Password Only:</strong> moniteye2024</p>
+            <p><strong>Admin Account:</strong> akeal@moniteye.co.uk / moniteye2024</p>
+          </div>
+        </div>
       </div>
     </div>
   )

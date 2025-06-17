@@ -1,15 +1,34 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { useAuth } from "../contexts/AuthContext";
-import { UserRole, hasRole } from "../lib/auth";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
+interface User {
+  email: string;
+  name: string;
+  role: 'admin' | 'manager' | 'employee' | 'guest';
+  department: string;
+}
+
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
-  const { user, profile, signOut } = useAuth();
+  const [user, setUser] = useState<User | null>(null);
+
+  // Load user info from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const userData = localStorage.getItem('moniteye-user');
+      if (userData) {
+        try {
+          setUser(JSON.parse(userData));
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+    }
+  }, []);
 
   const baseNavigation = [
     { name: "Dashboard", href: "/", icon: "🏠" },
@@ -20,18 +39,21 @@ export default function Layout({ children }: LayoutProps) {
   ];
 
   const adminNavigation = [
-    { name: "Business Ideas", href: "/business-ideas", icon: "💡", adminOnly: true },
-    { name: "Admin", href: "/admin", icon: "⚙️", adminOnly: true },
+    { name: "Business Ideas", href: "/business-ideas", icon: "💡", requiredRole: 'manager' },
+    { name: "Users", href: "/users", icon: "👥", requiredRole: 'admin' },
+    { name: "Admin", href: "/admin", icon: "⚙️", requiredRole: 'admin' },
   ];
 
   // Filter navigation based on user role
   const getFilteredNavigation = () => {
-    if (!profile) return baseNavigation;
+    if (!user) return [...baseNavigation, ...adminNavigation]; // Show all if no user (old system)
+    
+    const roleHierarchy = { guest: 0, employee: 1, manager: 2, admin: 3 };
+    const userLevel = roleHierarchy[user.role];
     
     const filteredAdmin = adminNavigation.filter(item => {
-      if (item.href === '/admin') return hasRole(profile.role, 'admin');
-      if (item.href === '/business-ideas') return hasRole(profile.role, 'manager');
-      return false;
+      const requiredLevel = roleHierarchy[item.requiredRole as keyof typeof roleHierarchy];
+      return userLevel >= requiredLevel;
     });
     
     return [...baseNavigation, ...filteredAdmin];
@@ -44,6 +66,14 @@ export default function Layout({ children }: LayoutProps) {
       return router.pathname === "/";
     }
     return router.pathname.startsWith(href);
+  };
+
+  const handleLogout = () => {
+    // Clear authentication
+    document.cookie = 'moniteye-auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    localStorage.removeItem('moniteye-user');
+    setUser(null);
+    router.push('/login');
   };
 
   return (
@@ -76,32 +106,25 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-700">
-          {profile ? (
+          {user ? (
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
-                    {profile.full_name ? profile.full_name.charAt(0).toUpperCase() : profile.email.charAt(0).toUpperCase()}
+                    {user.name.charAt(0).toUpperCase()}
                   </span>
                 </div>
                 <div>
                   <p className="text-white text-sm font-medium">
-                    {profile.full_name || profile.email}
+                    {user.name}
                   </p>
                   <p className="text-gray-400 text-xs capitalize">
-                    {profile.role}
+                    {user.role}
                   </p>
                 </div>
               </div>
               <button
-                onClick={async () => {
-                  try {
-                    await signOut();
-                    router.push('/auth/login');
-                  } catch (error) {
-                    console.error('Logout failed:', error);
-                  }
-                }}
+                onClick={handleLogout}
                 className="text-gray-400 hover:text-white text-xs p-1 rounded hover:bg-gray-700"
                 title="Sign Out"
               >
@@ -111,10 +134,10 @@ export default function Layout({ children }: LayoutProps) {
           ) : (
             <div className="text-center">
               <a
-                href="/auth/login"
+                href="/login"
                 className="text-blue-400 hover:text-blue-300 text-sm font-medium"
               >
-                🔑 Sign In
+                🔑 Login
               </a>
             </div>
           )}
