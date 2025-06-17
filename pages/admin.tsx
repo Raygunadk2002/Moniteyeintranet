@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import Layout from '../components/Layout'
+import RoleBasedAccessControl from '../components/RoleBasedAccessControl'
+import Dashboard from '../components/Dashboard'
+import SimpleDashboard from '../components/SimpleDashboard'
 
 interface UploadResult {
   success: boolean;

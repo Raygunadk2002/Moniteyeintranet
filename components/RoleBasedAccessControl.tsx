@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
-interface AdminAccessControlProps {
+interface RoleBasedAccessControlProps {
   children: React.ReactNode;
   moduleName: string;
+  requiredRole: 'admin' | 'manager' | 'employee' | 'guest';
+  allowAdminOverride?: boolean; // Allow admin password override for lower roles
 }
 
 interface User {
@@ -12,15 +14,24 @@ interface User {
   department: string;
 }
 
-export default function AdminAccessControl({ children, moduleName }: AdminAccessControlProps) {
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+export default function RoleBasedAccessControl({ 
+  children, 
+  moduleName, 
+  requiredRole,
+  allowAdminOverride = true 
+}: RoleBasedAccessControlProps) {
+  const [hasAccess, setHasAccess] = useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [isAdminOverride, setIsAdminOverride] = useState(false);
 
-  // Load user info and check authentication
+  // Role hierarchy for access checking
+  const roleHierarchy = { guest: 0, employee: 1, manager: 2, admin: 3 };
+
+  // Check user role and admin override authentication
   useEffect(() => {
     if (typeof window !== 'undefined') {
       // Get current user data
@@ -30,9 +41,12 @@ export default function AdminAccessControl({ children, moduleName }: AdminAccess
           const parsedUser = JSON.parse(userData);
           setUser(parsedUser);
           
-          // Automatically grant access to admin users
-          if (parsedUser.role === 'admin') {
-            setIsAdminAuthenticated(true);
+          // Check if user has required role or higher
+          const userLevel = roleHierarchy[parsedUser.role as keyof typeof roleHierarchy];
+          const requiredLevel = roleHierarchy[requiredRole];
+          
+          if (userLevel >= requiredLevel) {
+            setHasAccess(true);
             return;
           }
         } catch (error) {
@@ -40,25 +54,28 @@ export default function AdminAccessControl({ children, moduleName }: AdminAccess
         }
       }
 
-      // For non-admin users, check if they have admin password authentication
-      const adminAuth = localStorage.getItem('admin-authenticated');
-      const authTimestamp = localStorage.getItem('admin-auth-timestamp');
-      
-      if (adminAuth === 'true' && authTimestamp) {
-        const authTime = parseInt(authTimestamp);
-        const currentTime = Date.now();
-        const fourHours = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
+      // For users without sufficient role, check admin override if allowed
+      if (allowAdminOverride) {
+        const adminAuth = localStorage.getItem('admin-authenticated');
+        const authTimestamp = localStorage.getItem('admin-auth-timestamp');
         
-        if (currentTime - authTime < fourHours) {
-          setIsAdminAuthenticated(true);
-        } else {
-          // Admin session expired
-          localStorage.removeItem('admin-authenticated');
-          localStorage.removeItem('admin-auth-timestamp');
+        if (adminAuth === 'true' && authTimestamp) {
+          const authTime = parseInt(authTimestamp);
+          const currentTime = Date.now();
+          const fourHours = 4 * 60 * 60 * 1000; // 4 hours in milliseconds
+          
+          if (currentTime - authTime < fourHours) {
+            setHasAccess(true);
+            setIsAdminOverride(true);
+          } else {
+            // Admin session expired
+            localStorage.removeItem('admin-authenticated');
+            localStorage.removeItem('admin-auth-timestamp');
+          }
         }
       }
     }
-  }, []);
+  }, [requiredRole, allowAdminOverride]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,15 +94,14 @@ export default function AdminAccessControl({ children, moduleName }: AdminAccess
       const data = await response.json();
 
       if (data.success) {
-        setIsAdminAuthenticated(true);
+        setHasAccess(true);
+        setIsAdminOverride(true);
         setShowPasswordPrompt(false);
         setPassword('');
         
-        // Store admin authentication with timestamp (only for non-admin users)
-        if (user?.role !== 'admin') {
-          localStorage.setItem('admin-authenticated', 'true');
-          localStorage.setItem('admin-auth-timestamp', Date.now().toString());
-        }
+        // Store admin authentication with timestamp
+        localStorage.setItem('admin-authenticated', 'true');
+        localStorage.setItem('admin-auth-timestamp', Date.now().toString());
       } else {
         setError(data.error || 'Invalid admin password');
       }
@@ -102,39 +118,51 @@ export default function AdminAccessControl({ children, moduleName }: AdminAccess
   };
 
   const handleLogout = () => {
-    setIsAdminAuthenticated(false);
+    setHasAccess(false);
+    setIsAdminOverride(false);
     setShowPasswordPrompt(false);
     setPassword('');
-    
-    // Only clear stored admin auth for non-admin users
-    if (user?.role !== 'admin') {
-      localStorage.removeItem('admin-authenticated');
-      localStorage.removeItem('admin-auth-timestamp');
-    }
+    localStorage.removeItem('admin-authenticated');
+    localStorage.removeItem('admin-auth-timestamp');
   };
 
-  // If admin is authenticated, show the protected content
-  if (isAdminAuthenticated) {
+  // Get access type display
+  const getAccessType = () => {
+    if (!user) return 'Unknown';
+    
+    const userLevel = roleHierarchy[user.role as keyof typeof roleHierarchy];
+    const requiredLevel = roleHierarchy[requiredRole];
+    
+    if (userLevel >= requiredLevel) {
+      return 'Role-based';
+    } else if (isAdminOverride) {
+      return 'Admin override';
+    }
+    return 'Unauthorized';
+  };
+
+  // If user has access, show the protected content
+  if (hasAccess) {
     return (
       <div>
-        {/* Admin status indicator */}
+        {/* Access status indicator */}
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <span className="text-green-600 text-sm">
-                {user?.role === 'admin' ? (
-                  <>🔓 Admin access granted for {moduleName}</>
+                {getAccessType() === 'Role-based' ? (
+                  <>🔓 Access granted: {user?.role} level for {moduleName}</>
                 ) : (
-                  <>🔐 Admin access active for {moduleName}</>
+                  <>🔐 Admin override active for {moduleName}</>
                 )}
               </span>
             </div>
-            {user?.role !== 'admin' && (
+            {isAdminOverride && (
               <button
                 onClick={handleLogout}
                 className="text-green-700 hover:text-green-900 text-sm font-medium"
               >
-                Logout Admin
+                End Override
               </button>
             )}
           </div>
@@ -145,7 +173,7 @@ export default function AdminAccessControl({ children, moduleName }: AdminAccess
   }
 
   // Show password prompt if requested
-  if (showPasswordPrompt) {
+  if (showPasswordPrompt && allowAdminOverride) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
         <div className="max-w-md w-full space-y-8">
@@ -154,10 +182,10 @@ export default function AdminAccessControl({ children, moduleName }: AdminAccess
               <span className="text-white text-2xl font-bold">🔐</span>
             </div>
             <h2 className="mt-6 text-center text-2xl font-bold text-gray-900">
-              Admin Access Required
+              Admin Override Required
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
-              Enter the master admin password to access {moduleName}
+              Enter the admin password to override access restrictions for {moduleName}
             </p>
           </div>
           
@@ -216,7 +244,7 @@ export default function AdminAccessControl({ children, moduleName }: AdminAccess
                     Verifying...
                   </>
                 ) : (
-                  'Access Admin'
+                  'Grant Access'
                 )}
               </button>
             </div>
@@ -226,49 +254,51 @@ export default function AdminAccessControl({ children, moduleName }: AdminAccess
     );
   }
 
-  // Show access request screen
+  // Show access denied screen
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
       <div className="max-w-md w-full space-y-8 text-center">
         <div>
-          <div className="mx-auto h-20 w-20 bg-gray-200 rounded-full flex items-center justify-center">
-            <span className="text-3xl">🔒</span>
+          <div className="mx-auto h-20 w-20 bg-red-100 rounded-full flex items-center justify-center">
+            <span className="text-3xl">🚫</span>
           </div>
           <h2 className="mt-6 text-center text-2xl font-bold text-gray-900">
-            Restricted Access
+            Access Denied
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            {moduleName} requires admin privileges to access.
+            {moduleName} requires {requiredRole} level access or higher.
           </p>
         </div>
         
         <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Admin Module</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            This module contains sensitive business and administrative functions that require elevated permissions.
-          </p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Access Requirements</h3>
+          <div className="text-sm text-gray-600 space-y-2">
+            <div className="flex justify-between">
+              <span>Required Role:</span>
+              <span className="font-medium capitalize">{requiredRole}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Your Role:</span>
+              <span className="font-medium capitalize">{user?.role || 'Unknown'}</span>
+            </div>
+          </div>
           
-          {user?.role === 'admin' ? (
-            <div className="text-sm text-blue-600 mb-4">
-              ⚠️ You have admin privileges but access was not automatically granted. Please refresh the page.
-            </div>
-          ) : (
-            <div className="text-sm text-gray-600 mb-4">
-              Current role: <span className="font-medium capitalize">{user?.role || 'Unknown'}</span>
-            </div>
+          {allowAdminOverride && (
+            <>
+              <hr className="my-4" />
+              <button
+                onClick={handleRequestAccess}
+                className="w-full py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+              >
+                🔐 Request Admin Override
+              </button>
+            </>
           )}
-          
-          <button
-            onClick={handleRequestAccess}
-            className="w-full py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
-          >
-            🔐 Request Admin Access
-          </button>
         </div>
 
         <div className="text-xs text-gray-500">
-          <p>Admin sessions expire after 4 hours for security.</p>
-          <p>Contact your system administrator if you need access.</p>
+          <p>Contact your system administrator if you need elevated access.</p>
+          {allowAdminOverride && <p>Admin overrides expire after 4 hours for security.</p>}
         </div>
       </div>
     </div>
