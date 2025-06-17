@@ -68,7 +68,7 @@ export default function Layout({ children }: LayoutProps) {
               onClick={async () => {
                 try {
                   await fetch('/api/auth/logout', { method: 'POST' });
-                  document.cookie = 'moniteye-auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                  document.cookie = 'moniteye-auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; samesite=strict';
                   window.location.href = '/login';
                 } catch (error) {
                   console.error('Logout failed:', error);

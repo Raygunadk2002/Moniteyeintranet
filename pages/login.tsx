@@ -37,8 +37,9 @@ export default function Login() {
       const data = await response.json()
 
       if (data.success) {
-        // Set authentication cookie
-        document.cookie = 'moniteye-auth=authenticated; path=/; max-age=86400; secure; samesite=strict'
+        // Set authentication cookie (adapt secure setting based on protocol)
+        const isSecure = window.location.protocol === 'https:'
+        document.cookie = `moniteye-auth=authenticated; path=/; max-age=86400; ${isSecure ? 'secure;' : ''} samesite=strict`
         
         // Redirect to dashboard
         router.push('/')
