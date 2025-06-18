@@ -803,6 +803,98 @@ export default function AdvancedBusinessModelingEngine({
                   
                   {modelType === 'SAAS' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Monthly Pricing Tiers */}
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Monthly Pricing Tiers
+                        </label>
+                        <div className="space-y-2">
+                          {(modelConfig.modelInputs.saas?.monthlyPriceTiers || [{ name: 'Basic', price: 29 }]).map((tier, index) => (
+                            <div key={index} className="flex gap-2">
+                              <input
+                                type="text"
+                                value={tier.name}
+                                onChange={(e) => {
+                                  const newTiers = [...(modelConfig.modelInputs.saas?.monthlyPriceTiers || [])];
+                                  newTiers[index] = { ...newTiers[index], name: e.target.value };
+                                  setModelConfig(prev => ({
+                                    ...prev,
+                                    modelInputs: {
+                                      ...prev.modelInputs,
+                                      saas: {
+                                        ...prev.modelInputs.saas!,
+                                        monthlyPriceTiers: newTiers
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Tier name"
+                              />
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={tier.price}
+                                onChange={(e) => {
+                                  const newTiers = [...(modelConfig.modelInputs.saas?.monthlyPriceTiers || [])];
+                                  newTiers[index] = { ...newTiers[index], price: parseFloat(e.target.value) || 0 };
+                                  setModelConfig(prev => ({
+                                    ...prev,
+                                    modelInputs: {
+                                      ...prev.modelInputs,
+                                      saas: {
+                                        ...prev.modelInputs.saas!,
+                                        monthlyPriceTiers: newTiers
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Price"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newTiers = (modelConfig.modelInputs.saas?.monthlyPriceTiers || []).filter((_, i) => i !== index);
+                                  setModelConfig(prev => ({
+                                    ...prev,
+                                    modelInputs: {
+                                      ...prev.modelInputs,
+                                      saas: {
+                                        ...prev.modelInputs.saas!,
+                                        monthlyPriceTiers: newTiers.length > 0 ? newTiers : [{ name: 'Basic', price: 29 }]
+                                      }
+                                    }
+                                  }));
+                                }}
+                                className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newTiers = [...(modelConfig.modelInputs.saas?.monthlyPriceTiers || []), { name: 'New Tier', price: 0 }];
+                              setModelConfig(prev => ({
+                                ...prev,
+                                modelInputs: {
+                                  ...prev.modelInputs,
+                                  saas: {
+                                    ...prev.modelInputs.saas!,
+                                    monthlyPriceTiers: newTiers
+                                  }
+                                }
+                              }));
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-800"
+                          >
+                            + Add Pricing Tier
+                          </button>
+                        </div>
+                      </div>
+                      
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Monthly New User Acquisition
@@ -880,6 +972,56 @@ export default function AdvancedBusinessModelingEngine({
                           }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., 50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Free Trial Conversion Rate (%)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={modelConfig.modelInputs.saas?.freeTrialConversionRate ? (modelConfig.modelInputs.saas.freeTrialConversionRate * 100) : ''}
+                          onChange={(e) => {
+                            const value = (parseFloat(e.target.value) || 0) / 100;
+                            setModelConfig(prev => ({
+                              ...prev,
+                              modelInputs: {
+                                ...prev.modelInputs,
+                                saas: {
+                                  ...prev.modelInputs.saas!,
+                                  freeTrialConversionRate: value
+                                }
+                              }
+                            }));
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., 15.0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Upsell/Expansion Revenue (%)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={modelConfig.modelInputs.saas?.upsellExpansionRevenue || ''}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            setModelConfig(prev => ({
+                              ...prev,
+                              modelInputs: {
+                                ...prev.modelInputs,
+                                saas: {
+                                  ...prev.modelInputs.saas!,
+                                  upsellExpansionRevenue: value
+                                }
+                              }
+                            }));
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., 20.0"
                         />
                       </div>
                       <div className="col-span-2">
