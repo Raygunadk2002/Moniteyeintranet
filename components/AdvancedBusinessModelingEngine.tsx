@@ -325,6 +325,64 @@ export default function AdvancedBusinessModelingEngine({
 
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [selectedModels, setSelectedModels] = useState<BusinessModelType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load existing advanced model data
+  useEffect(() => {
+    const loadExistingModel = async () => {
+      try {
+        const response = await fetch(`/api/business-ideas/${idea.id}/advanced-model?userId=770b4d63-98f5-4a1e-8d77-9445cb014f93`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            const existingModel = data.data;
+            
+            // Update model configuration with existing data
+            setModelConfig({
+              id: existingModel.business_idea_id,
+              name: existingModel.name || idea.name,
+              description: existingModel.description || idea.description,
+              sector: existingModel.sector || idea.industry,
+              launchYear: existingModel.launch_year || new Date().getFullYear(),
+              modelActivations: existingModel.model_activations || [],
+              modelInputs: existingModel.model_inputs || {},
+              globalCosts: existingModel.global_costs || {
+                initialSetupCost: 0,
+                monthlyFixedCosts: 0,
+                teamCostsByYear: [
+                  { year: 1, totalCost: 0 },
+                  { year: 2, totalCost: 0 },
+                  { year: 3, totalCost: 0 },
+                  { year: 4, totalCost: 0 },
+                  { year: 5, totalCost: 0 }
+                ],
+                hostingInfrastructure: 0,
+                marketingBudget: 0,
+                fulfillmentLogistics: 0,
+                taxRate: 0.2,
+                paymentProcessingFees: 0.029
+              },
+              assumptions: existingModel.assumptions || {
+                inflationRate: 0.03,
+                discountRate: 0.1,
+                forecastYears: 5
+              }
+            });
+            
+            // Set selected models based on model activations
+            const activatedModels = (existingModel.model_activations || []).map((activation: any) => activation.modelType);
+            setSelectedModels(activatedModels);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading existing model:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadExistingModel();
+  }, [idea.id, idea.name, idea.description, idea.industry]);
 
   // Available business models
   const availableModels: { type: BusinessModelType; description: string; icon: string }[] = [
@@ -544,8 +602,48 @@ export default function AdvancedBusinessModelingEngine({
       setModelConfig(prev => {
         const newModelInputs = { ...prev.modelInputs };
         
-        // Initialize default values for Property Play
-        if (modelType === 'Property Play') {
+        // Initialize default values for different model types
+        if (modelType === 'SAAS') {
+          newModelInputs.saas = {
+            monthlyPriceTiers: [
+              { name: 'Basic', price: 29.99 },
+              { name: 'Pro', price: 99.99 }
+            ],
+            freeTrialConversionRate: 15,
+            monthlyNewUserAcquisition: 100,
+            userChurnRate: 5.0,
+            cac: 75,
+            growthRatesByYear: createDefaultGrowthRates(5, 3),
+            upsellExpansionRevenue: 25
+          };
+        } else if (modelType === 'Hardware + SAAS') {
+          newModelInputs.hardwareSaas = {
+            hardwareUnitCost: 50,
+            hardwareSalePrice: 199,
+            monthlyHardwareUnitsSold: 50,
+            hardwareGrowthRate: 5,
+            hardwareToSaasConversion: 60,
+            monthlySaasPrice: 19.99,
+            hardwareMargin: 75,
+            supportCosts: 10
+          };
+        } else if (modelType === 'Straight Sales') {
+          newModelInputs.straightSales = {
+            unitPrice: 99.99,
+            cogs: 30,
+            unitsSoldPerMonth: 200,
+            growthRate: 3,
+            channelFees: 15,
+            seasonalityFactor: [1.0, 1.0, 1.2, 1.1, 1.0, 0.9, 0.8, 0.8, 1.0, 1.1, 1.3, 1.4]
+          };
+        } else if (modelType === 'Marketplace') {
+          newModelInputs.marketplace = {
+            gmvPerMonth: 50000,
+            takeRate: 8,
+            gmvGrowthRate: 10,
+            supportCostsPercent: 2
+          };
+        } else if (modelType === 'Property Play') {
           newModelInputs.propertyPlay = {
             propertyPurchasePrice: 250000,
             downPaymentPercentage: 20,
@@ -569,9 +667,27 @@ export default function AdvancedBusinessModelingEngine({
           };
         }
         
+        // Also add some default cost structure if this is the first model
+        const updatedGlobalCosts = prev.globalCosts.initialSetupCost === 0 ? {
+          ...prev.globalCosts,
+          initialSetupCost: 25000,
+          monthlyFixedCosts: 3000,
+          teamCostsByYear: [
+            { year: 1, totalCost: 120000 },
+            { year: 2, totalCost: 150000 },
+            { year: 3, totalCost: 200000 },
+            { year: 4, totalCost: 250000 },
+            { year: 5, totalCost: 300000 }
+          ],
+          hostingInfrastructure: 500,
+          marketingBudget: 2000,
+          fulfillmentLogistics: 200
+        } : prev.globalCosts;
+
         return {
           ...prev,
           modelInputs: newModelInputs,
+          globalCosts: updatedGlobalCosts,
           modelActivations: [...prev.modelActivations, {
             modelType,
             startYear: prev.launchYear,
@@ -663,7 +779,16 @@ export default function AdvancedBusinessModelingEngine({
 
       {/* Tab Content */}
       <div className="p-6">
-        {activeTab === 'setup' && (
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-gray-600 mt-2">Loading existing model data...</p>
+            </div>
+          </div>
+        )}
+        
+        {!isLoading && activeTab === 'setup' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -775,7 +900,7 @@ export default function AdvancedBusinessModelingEngine({
           </div>
         )}
 
-        {activeTab === 'models' && (
+        {!isLoading && activeTab === 'models' && (
           <div className="space-y-8">
             {selectedModels.length === 0 ? (
               <div className="text-center py-12">
@@ -2111,7 +2236,7 @@ export default function AdvancedBusinessModelingEngine({
           </div>
         )}
 
-        {activeTab === 'costs' && (
+        {!isLoading && activeTab === 'costs' && (
           <div className="space-y-6">
             <div className="bg-blue-50 rounded-lg p-6">
               <h3 className="text-lg font-medium text-blue-900 mb-2">💰 Global Cost Structure</h3>
@@ -2429,7 +2554,7 @@ export default function AdvancedBusinessModelingEngine({
           </div>
         )}
 
-        {activeTab === 'forecast' && (
+        {!isLoading && activeTab === 'forecast' && (
           <div className="space-y-6">
             <div className="bg-gray-50 rounded-lg p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Revenue Forecast Summary</h3>
@@ -2528,7 +2653,7 @@ export default function AdvancedBusinessModelingEngine({
           </div>
         )}
 
-        {activeTab === 'analysis' && (
+        {!isLoading && activeTab === 'analysis' && (
           <div className="space-y-6">
             {/* Sensitivity Analysis Component */}
             <SensitivityAnalysis 
