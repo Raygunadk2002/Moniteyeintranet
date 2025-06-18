@@ -31,24 +31,29 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 // Admin client for server-side operations (bypasses RLS)
-// Only create this if we have the service key (server-side only)
-export const supabaseAdmin = supabaseServiceKey 
-  ? createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
+// Always create this, but throw error if service key is missing when actually used
+export const supabaseAdmin = createClient(
+  supabaseUrl, 
+  supabaseServiceKey || supabaseAnonKey, // Fallback to anon key for type safety
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    },
+    global: {
+      fetch: (url, options = {}) => {
+        if (!supabaseServiceKey) {
+          throw new Error('Supabase service key is required for admin operations')
+        }
+        return fetch(url, {
+          ...options,
+          // Add timeout for admin operations
+          signal: AbortSignal.timeout(45000), // 45 second timeout for admin operations
+        });
       },
-      global: {
-        fetch: (url, options = {}) => {
-          return fetch(url, {
-            ...options,
-            // Add timeout for admin operations
-            signal: AbortSignal.timeout(45000), // 45 second timeout for admin operations
-          });
-        },
-      },
-    })
-  : null
+    },
+  }
+)
 
 // Helper function to ensure admin client is available (server-side only)
 export function getSupabaseAdmin() {
