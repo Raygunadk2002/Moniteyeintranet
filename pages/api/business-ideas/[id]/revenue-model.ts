@@ -78,21 +78,48 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, businessIde
       return res.status(403).json({ error: 'Business idea not found or access denied' });
     }
 
-    // Use upsert to handle both create and update
-    const { data, error } = await supabaseAdmin
+    // First try to get existing model
+    const { data: existingModel } = await supabaseAdmin
       .from('revenue_models')
-      .upsert({
-        business_idea_id: businessIdeaId,
-        business_model: modelData.businessModel,
-        parameters: modelData.parameters || {},
-        growth_assumptions: modelData.growthAssumptions || {},
-        forecast: modelData.forecast || {}
-      }, {
-        onConflict: 'business_idea_id',
-        ignoreDuplicates: false
-      })
-      .select()
+      .select('id')
+      .eq('business_idea_id', businessIdeaId)
       .single();
+
+    let data, error;
+
+    if (existingModel) {
+      // Update existing model
+      const result = await supabaseAdmin
+        .from('revenue_models')
+        .update({
+          business_model: modelData.businessModel,
+          parameters: modelData.parameters || {},
+          growth_assumptions: modelData.growthAssumptions || {},
+          forecast: modelData.forecast || {}
+        })
+        .eq('business_idea_id', businessIdeaId)
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    } else {
+      // Create new model
+      const result = await supabaseAdmin
+        .from('revenue_models')
+        .insert({
+          business_idea_id: businessIdeaId,
+          business_model: modelData.businessModel,
+          parameters: modelData.parameters || {},
+          growth_assumptions: modelData.growthAssumptions || {},
+          forecast: modelData.forecast || {}
+        })
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) {
       console.error('Error saving revenue model:', error);

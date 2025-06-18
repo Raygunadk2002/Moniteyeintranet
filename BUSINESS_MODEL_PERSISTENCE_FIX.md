@@ -89,11 +89,12 @@ npm run dev
 - ✅ Added `UNIQUE (business_idea_id)` constraint to `advanced_business_models`
 - ✅ Enables proper upsert operations (INSERT ON CONFLICT)
 
-### API Improvements
-- ✅ **Revenue Model API**: Now uses `upsert()` instead of `insert()`
-- ✅ **Advanced Model API**: Now uses `upsert()` instead of separate insert/update logic
+### API Improvements - **MAJOR REFACTOR**
+- ✅ **Revenue Model API**: **Replaced unreliable upsert with explicit check-then-insert-or-update pattern**
+- ✅ **Advanced Model API**: **Same pattern - checks if model exists, then INSERTs or UPDATEs accordingly**
 - ✅ **Better Error Handling**: More detailed error messages with constraint details
-- ✅ **Conflict Resolution**: Proper `onConflict: 'business_idea_id'` handling
+- ✅ **Eliminated upsert dependency**: APIs now work even without database constraints
+- ✅ **Improved reliability**: No more `42P10` constraint errors
 
 ### Frontend Flow
 - ✅ **Authentication Check**: Properly handles authenticated vs non-authenticated users
@@ -170,6 +171,34 @@ You'll know the fix worked when:
 - ✅ Models show up in the business ideas list
 - ✅ No more "42P10" constraint errors in terminal
 - ✅ Database tables show new entries when models are saved
+
+## ✅ **VERIFIED WORKING**
+
+**Testing completed successfully on 2025-06-18:**
+
+**Advanced Model Test**:
+```bash
+# Save test passed ✅
+curl -X POST "http://localhost:3000/api/business-ideas/{id}/advanced-model?userId={userId}" \
+  -d '{"name": "Test Advanced Model", "sector": "Technology", ...}'
+# Response: {"success": true, "message": "Advanced model saved successfully"}
+
+# Retrieval test passed ✅  
+curl "http://localhost:3000/api/business-ideas/{id}/advanced-model?userId={userId}"
+# Response: Model data retrieved successfully
+```
+
+**Revenue Model Test**:
+```bash
+# Save test passed ✅
+curl -X POST "http://localhost:3000/api/business-ideas/{id}/revenue-model?userId={userId}" \
+  -d '{"businessModel": "SAAS", "parameters": {...}}'
+# Response: {"success": true, "message": "Revenue model saved successfully"}
+
+# Retrieval test passed ✅
+curl "http://localhost:3000/api/business-ideas/{id}/revenue-model?userId={userId}"
+# Response: Model data retrieved successfully
+```
 
 ---
 

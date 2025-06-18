@@ -78,26 +78,58 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, businessIde
       return res.status(403).json({ error: 'Business idea not found or access denied' });
     }
 
-    // Use upsert with proper ON CONFLICT handling
-    const { data, error } = await supabaseAdmin
+    // First try to get existing model
+    const { data: existingModel } = await supabaseAdmin
       .from('advanced_business_models')
-      .upsert({
-        business_idea_id: businessIdeaId,
-        name: modelData.name || 'Advanced Business Model',
-        description: modelData.description || '',
-        sector: modelData.sector || 'General',
-        launch_year: modelData.launchYear || new Date().getFullYear(),
-        model_activations: modelData.modelActivations || [],
-        model_inputs: modelData.modelInputs || {},
-        global_costs: modelData.costStructures || {},
-        assumptions: modelData.assumptions || {},
-        forecast_results: modelData.forecastResults || []
-      }, {
-        onConflict: 'business_idea_id',
-        ignoreDuplicates: false
-      })
-      .select()
+      .select('id')
+      .eq('business_idea_id', businessIdeaId)
       .single();
+
+    let data, error;
+
+    if (existingModel) {
+      // Update existing model
+      const result = await supabaseAdmin
+        .from('advanced_business_models')
+        .update({
+          name: modelData.name || 'Advanced Business Model',
+          description: modelData.description || '',
+          sector: modelData.sector || 'General',
+          launch_year: modelData.launchYear || new Date().getFullYear(),
+          model_activations: modelData.modelActivations || [],
+          model_inputs: modelData.modelInputs || {},
+          global_costs: modelData.costStructures || {},
+          assumptions: modelData.assumptions || {},
+          forecast_results: modelData.forecastResults || []
+        })
+        .eq('business_idea_id', businessIdeaId)
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    } else {
+      // Create new model
+      const result = await supabaseAdmin
+        .from('advanced_business_models')
+        .insert({
+          business_idea_id: businessIdeaId,
+          name: modelData.name || 'Advanced Business Model',
+          description: modelData.description || '',
+          sector: modelData.sector || 'General',
+          launch_year: modelData.launchYear || new Date().getFullYear(),
+          model_activations: modelData.modelActivations || [],
+          model_inputs: modelData.modelInputs || {},
+          global_costs: modelData.costStructures || {},
+          assumptions: modelData.assumptions || {},
+          forecast_results: modelData.forecastResults || []
+        })
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) {
       console.error('Error creating/updating advanced model:', error);
