@@ -5,6 +5,7 @@ import BusinessIdeaForm from '../components/BusinessIdeaForm';
 import BusinessIdeaList from '../components/BusinessIdeaList';
 import RevenueModelingEngine from '../components/RevenueModelingEngine';
 import AdvancedBusinessModelingEngine from '../components/AdvancedBusinessModelingEngine';
+import { supabase } from '../lib/supabase';
 
 export interface BusinessIdea {
   id: string;
@@ -28,48 +29,146 @@ export default function BusinessIdeas() {
   const [selectedIdea, setSelectedIdea] = useState<BusinessIdea | null>(null);
   const [activeTab, setActiveTab] = useState<'list' | 'form' | 'modeling' | 'advanced'>('list');
   const [editingIdea, setEditingIdea] = useState<BusinessIdea | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Load ideas from localStorage on component mount
+  // Get current user and load ideas from Supabase
   useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUserId(user.id);
+          await loadBusinessIdeas(user.id);
+        } else {
+          // Fallback to localStorage for non-authenticated users
+          loadFromLocalStorage();
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error);
+        loadFromLocalStorage();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getCurrentUser();
+  }, []);
+
+  const loadBusinessIdeas = async (currentUserId: string) => {
+    try {
+      const response = await fetch(`/api/business-ideas?userId=${currentUserId}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setIdeas(result.data);
+        }
+      } else {
+        console.error('Failed to load business ideas from API');
+        loadFromLocalStorage();
+      }
+    } catch (error) {
+      console.error('Error loading business ideas:', error);
+      loadFromLocalStorage();
+    }
+  };
+
+  const loadFromLocalStorage = () => {
     const savedIdeas = localStorage.getItem('businessIdeas');
     if (savedIdeas) {
       try {
         setIdeas(JSON.parse(savedIdeas));
       } catch (error) {
-        console.error('Error loading business ideas:', error);
+        console.error('Error loading business ideas from localStorage:', error);
       }
     }
-  }, []);
+  };
 
-  // Save ideas to localStorage whenever ideas change
+  // Save to localStorage as backup (still useful for offline scenarios)
   useEffect(() => {
-    localStorage.setItem('businessIdeas', JSON.stringify(ideas));
+    if (ideas.length > 0) {
+      localStorage.setItem('businessIdeas', JSON.stringify(ideas));
+    }
   }, [ideas]);
 
-  const handleSaveIdea = (ideaData: Omit<BusinessIdea, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const now = new Date().toISOString();
-    
-    if (editingIdea) {
-      // Update existing idea
-      const updatedIdea: BusinessIdea = {
-        ...editingIdea,
-        ...ideaData,
-        updatedAt: now
-      };
-      setIdeas(prev => prev.map(idea => idea.id === editingIdea.id ? updatedIdea : idea));
-      setEditingIdea(null);
-    } else {
-      // Create new idea
-      const newIdea: BusinessIdea = {
-        ...ideaData,
-        id: `idea-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        createdAt: now,
-        updatedAt: now
-      };
-      setIdeas(prev => [...prev, newIdea]);
+  const handleSaveIdea = async (ideaData: Omit<BusinessIdea, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (!userId) {
+      // Fallback to localStorage for non-authenticated users
+      const now = new Date().toISOString();
+      
+      if (editingIdea) {
+        const updatedIdea: BusinessIdea = {
+          ...editingIdea,
+          ...ideaData,
+          updatedAt: now
+        };
+        setIdeas(prev => prev.map(idea => idea.id === editingIdea.id ? updatedIdea : idea));
+        setEditingIdea(null);
+      } else {
+        const newIdea: BusinessIdea = {
+          ...ideaData,
+          id: `idea-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          createdAt: now,
+          updatedAt: now
+        };
+        setIdeas(prev => [...prev, newIdea]);
+      }
+      
+      setActiveTab('list');
+      return;
     }
-    
-    setActiveTab('list');
+
+    try {
+      if (editingIdea) {
+        // Update existing idea
+        const response = await fetch(`/api/business-ideas?id=${editingIdea.id}&userId=${userId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(ideaData),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            setIdeas(prev => prev.map(idea => 
+              idea.id === editingIdea.id 
+                ? { ...ideaData, id: editingIdea.id, createdAt: editingIdea.createdAt, updatedAt: result.data.updated_at }
+                : idea
+            ));
+            setEditingIdea(null);
+          }
+        }
+      } else {
+        // Create new idea
+        const response = await fetch(`/api/business-ideas?userId=${userId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(ideaData),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            const newIdea: BusinessIdea = {
+              ...ideaData,
+              id: result.data.id,
+              createdAt: result.data.created_at,
+              updatedAt: result.data.updated_at
+            };
+            setIdeas(prev => [...prev, newIdea]);
+          }
+        }
+      }
+      
+      setActiveTab('list');
+    } catch (error) {
+      console.error('Error saving business idea:', error);
+      alert('Failed to save business idea. Please try again.');
+    }
   };
 
   const handleEditIdea = (idea: BusinessIdea) => {
@@ -77,12 +176,39 @@ export default function BusinessIdeas() {
     setActiveTab('form');
   };
 
-  const handleDeleteIdea = (ideaId: string) => {
-    if (confirm('Are you sure you want to delete this business idea?')) {
+  const handleDeleteIdea = async (ideaId: string) => {
+    if (!confirm('Are you sure you want to delete this business idea?')) {
+      return;
+    }
+
+    if (!userId) {
+      // Fallback to localStorage for non-authenticated users
       setIdeas(prev => prev.filter(idea => idea.id !== ideaId));
       if (selectedIdea?.id === ideaId) {
         setSelectedIdea(null);
       }
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/business-ideas?id=${ideaId}&userId=${userId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setIdeas(prev => prev.filter(idea => idea.id !== ideaId));
+          if (selectedIdea?.id === ideaId) {
+            setSelectedIdea(null);
+          }
+        }
+      } else {
+        throw new Error('Failed to delete business idea');
+      }
+    } catch (error) {
+      console.error('Error deleting business idea:', error);
+      alert('Failed to delete business idea. Please try again.');
     }
   };
 
@@ -96,20 +222,76 @@ export default function BusinessIdeas() {
     setActiveTab('advanced');
   };
 
-  const handleUpdateRevenueModel = (ideaId: string, revenueModel: any) => {
-    setIdeas(prev => prev.map(idea => 
-      idea.id === ideaId 
-        ? { ...idea, revenueModel, updatedAt: new Date().toISOString() }
-        : idea
-    ));
+  const handleUpdateRevenueModel = async (ideaId: string, revenueModel: any) => {
+    if (!userId) {
+      // Fallback to localStorage for non-authenticated users
+      setIdeas(prev => prev.map(idea => 
+        idea.id === ideaId 
+          ? { ...idea, revenueModel, updatedAt: new Date().toISOString() }
+          : idea
+      ));
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/business-ideas/${ideaId}/revenue-model?userId=${userId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(revenueModel),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setIdeas(prev => prev.map(idea => 
+            idea.id === ideaId 
+              ? { ...idea, revenueModel, updatedAt: new Date().toISOString() }
+              : idea
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Error saving revenue model:', error);
+      alert('Failed to save revenue model. Please try again.');
+    }
   };
 
-  const handleUpdateAdvancedModel = (ideaId: string, advancedModel: any) => {
-    setIdeas(prev => prev.map(idea => 
-      idea.id === ideaId 
-        ? { ...idea, advancedModel, updatedAt: new Date().toISOString() }
-        : idea
-    ));
+  const handleUpdateAdvancedModel = async (ideaId: string, advancedModel: any) => {
+    if (!userId) {
+      // Fallback to localStorage for non-authenticated users
+      setIdeas(prev => prev.map(idea => 
+        idea.id === ideaId 
+          ? { ...idea, advancedModel, updatedAt: new Date().toISOString() }
+          : idea
+      ));
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/business-ideas/${ideaId}/advanced-model?userId=${userId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(advancedModel),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setIdeas(prev => prev.map(idea => 
+            idea.id === ideaId 
+              ? { ...idea, advancedModel, updatedAt: new Date().toISOString() }
+              : idea
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Error saving advanced model:', error);
+      alert('Failed to save advanced model. Please try again.');
+    }
   };
 
   return (
@@ -177,7 +359,12 @@ export default function BusinessIdeas() {
 
           {/* Tab Content */}
           <div className="max-w-7xl mx-auto">
-            {activeTab === 'list' && (
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-gray-600">Loading business ideas...</span>
+              </div>
+            ) : activeTab === 'list' && (
               <BusinessIdeaList
                 ideas={ideas}
                 onEdit={handleEditIdea}

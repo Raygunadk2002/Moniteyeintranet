@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Business Modeling Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-step { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 3px; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Advanced Business Modeling Test</h1>
+    
+    <div class="test-step info">
+        <h3>Step 1: Check Current Environment</h3>
+        <p><strong>Current URL:</strong> <span id="currentUrl"></span></p>
+        <p><strong>User Agent:</strong> <span id="userAgent"></span></p>
+        <p><strong>Local Storage Available:</strong> <span id="localStorageAvailable"></span></p>
+    </div>
+
+    <div class="test-step info">
+        <h3>Step 2: Check User Authentication</h3>
+        <p><strong>Stored User:</strong> <span id="storedUser"></span></p>
+        <button class="btn-primary" onclick="checkAuth()">Check Authentication</button>
+    </div>
+
+    <div class="test-step info">
+        <h3>Step 3: Test Business Ideas Access</h3>
+        <button class="btn-primary" onclick="testBusinessIdeas()">Test Business Ideas Page</button>
+        <div id="businessIdeasResult"></div>
+    </div>
+
+    <div class="test-step info">
+        <h3>Step 4: Quick Links</h3>
+        <button class="btn-success" onclick="goToBusinessIdeas()">Go to Business Ideas</button>
+        <button class="btn-success" onclick="goToLogin()">Go to Login</button>
+        <button class="btn-primary" onclick="clearCache()">Clear Browser Cache</button>
+    </div>
+
+    <div class="test-step info">
+        <h3>Expected Features:</h3>
+        <ul>
+            <li>✅ Business Ideas link visible in sidebar (for admin users)</li>
+            <li>✅ Business idea cards have 4 buttons: Simple, Advanced, Edit, Delete</li>
+            <li>✅ Advanced Model button opens comprehensive modeling interface</li>
+            <li>✅ 5-tab interface: Setup → Models → Costs → Forecast → Analysis</li>
+            <li>✅ 9 business model types available for selection</li>
+        </ul>
+    </div>
+
+    <script>
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('currentUrl').textContent = window.location.href;
+            document.getElementById('userAgent').textContent = navigator.userAgent;
+            document.getElementById('localStorageAvailable').textContent = typeof(Storage) !== "undefined" ? "Yes" : "No";
+            
+            // Check stored user
+            try {
+                const user = localStorage.getItem('moniteye-user');
+                document.getElementById('storedUser').textContent = user ? JSON.stringify(JSON.parse(user), null, 2) : "No user stored";
+            } catch (e) {
+                document.getElementById('storedUser').textContent = "Error reading user data: " + e.message;
+            }
+        });
+
+        function checkAuth() {
+            try {
+                const user = localStorage.getItem('moniteye-user');
+                if (user) {
+                    const userData = JSON.parse(user);
+                    alert(`✅ User found!\nEmail: ${userData.email}\nRole: ${userData.role}\nName: ${userData.name}`);
+                } else {
+                    alert('❌ No user found in localStorage. Please log in first.');
+                }
+            } catch (e) {
+                alert('❌ Error checking authentication: ' + e.message);
+            }
+        }
+
+        function testBusinessIdeas() {
+            const result = document.getElementById('businessIdeasResult');
+            result.innerHTML = '<p>Testing access to Business Ideas page...</p>';
+            
+            // Test if we can access the business ideas page
+            fetch('/business-ideas')
+                .then(response => {
+                    if (response.ok) {
+                        result.innerHTML = '<p style="color: green;">✅ Business Ideas page is accessible!</p>';
+                    } else {
+                        result.innerHTML = '<p style="color: red;">❌ Cannot access Business Ideas page. Status: ' + response.status + '</p>';
+                    }
+                })
+                .catch(error => {
+                    result.innerHTML = '<p style="color: red;">❌ Error accessing Business Ideas page: ' + error.message + '</p>';
+                });
+        }
+
+        function goToBusinessIdeas() {
+            window.location.href = '/business-ideas';
+        }
+
+        function goToLogin() {
+            window.location.href = '/login';
+        }
+
+        function clearCache() {
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            // Reload page with cache bypass
+            window.location.reload(true);
+        }
+    </script>
+</body>
+</html> 

@@ -2,7 +2,16 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+// Validate required environment variables
+if (!supabaseUrl) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
+}
+
+if (!supabaseAnonKey) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable')
+}
 
 // Client for browser/client-side operations
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -22,21 +31,32 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 // Admin client for server-side operations (bypasses RLS)
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  },
-  global: {
-    fetch: (url, options = {}) => {
-      return fetch(url, {
-        ...options,
-        // Add timeout for admin operations
-        signal: AbortSignal.timeout(45000), // 45 second timeout for admin operations
-      });
-    },
-  },
-})
+// Only create this if we have the service key (server-side only)
+export const supabaseAdmin = supabaseServiceKey 
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        fetch: (url, options = {}) => {
+          return fetch(url, {
+            ...options,
+            // Add timeout for admin operations
+            signal: AbortSignal.timeout(45000), // 45 second timeout for admin operations
+          });
+        },
+      },
+    })
+  : null
+
+// Helper function to ensure admin client is available (server-side only)
+export function getSupabaseAdmin() {
+  if (!supabaseAdmin) {
+    throw new Error('Supabase admin client is not available. This function can only be used server-side.')
+  }
+  return supabaseAdmin
+}
 
 // Helper function for retrying Supabase operations
 export async function retrySupabaseOperation<T>(

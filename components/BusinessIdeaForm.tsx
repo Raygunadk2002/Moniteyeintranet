@@ -13,6 +13,10 @@ const BUSINESS_MODELS = [
   'Straight Sales',
   'Subscription Product',
   'Marketplace',
+  'Services/Consulting',
+  'Ad-Supported',
+  'Licensing/IP',
+  'Freemium',
   'Other'
 ] as const;
 
@@ -28,6 +32,9 @@ const INDUSTRIES = [
   'Transportation',
   'Entertainment',
   'Consulting',
+  'Construction',
+  'Energy',
+  'Agriculture',
   'Other'
 ];
 
@@ -41,6 +48,22 @@ const TARGET_MARKETS = [
   'Mixed'
 ];
 
+const MARKET_SIZES = [
+  'Local (<$1M)',
+  'Regional ($1M-$10M)',
+  'National ($10M-$100M)',
+  'Global ($100M+)',
+  'Unknown'
+];
+
+const COMPETITIVE_LANDSCAPES = [
+  'No direct competitors',
+  'Few competitors',
+  'Moderate competition',
+  'Highly competitive',
+  'Saturated market'
+];
+
 export default function BusinessIdeaForm({ idea, onSave, onCancel }: BusinessIdeaFormProps) {
   const [formData, setFormData] = useState({
     name: '',
@@ -51,11 +74,26 @@ export default function BusinessIdeaForm({ idea, onSave, onCancel }: BusinessIde
     initialStartupCost: 0,
     ongoingMonthlyCost: 0,
     ongoingAnnualCost: 0,
-    tags: [] as string[]
+    tags: [] as string[],
+    // Enhanced fields for advanced modeling
+    marketSize: '',
+    competitiveLandscape: '',
+    uniqueValueProposition: '',
+    expectedMonthlyRevenue: 0,
+    expectedAnnualRevenue: 0,
+    pricingStrategy: '',
+    customerAcquisitionCost: 0,
+    customerLifetimeValue: 0,
+    timeToMarket: 0, // months
+    teamSize: 0,
+    keyRisks: '',
+    successMetrics: '',
+    fundingRequired: 0
   });
 
   const [tagInput, setTagInput] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
 
   // Populate form when editing an existing idea
   useEffect(() => {
@@ -69,8 +107,27 @@ export default function BusinessIdeaForm({ idea, onSave, onCancel }: BusinessIde
         initialStartupCost: idea.initialStartupCost,
         ongoingMonthlyCost: idea.ongoingMonthlyCost,
         ongoingAnnualCost: idea.ongoingAnnualCost,
-        tags: idea.tags
+        tags: idea.tags,
+        // Enhanced fields
+        marketSize: (idea as any).marketSize || '',
+        competitiveLandscape: (idea as any).competitiveLandscape || '',
+        uniqueValueProposition: (idea as any).uniqueValueProposition || '',
+        expectedMonthlyRevenue: (idea as any).expectedMonthlyRevenue || 0,
+        expectedAnnualRevenue: (idea as any).expectedAnnualRevenue || 0,
+        pricingStrategy: (idea as any).pricingStrategy || '',
+        customerAcquisitionCost: (idea as any).customerAcquisitionCost || 0,
+        customerLifetimeValue: (idea as any).customerLifetimeValue || 0,
+        timeToMarket: (idea as any).timeToMarket || 0,
+        teamSize: (idea as any).teamSize || 0,
+        keyRisks: (idea as any).keyRisks || '',
+        successMetrics: (idea as any).successMetrics || '',
+        fundingRequired: (idea as any).fundingRequired || 0
       });
+      
+      // Show advanced fields if any advanced data exists
+      const hasAdvancedData = (idea as any).marketSize || (idea as any).uniqueValueProposition || 
+                             (idea as any).expectedMonthlyRevenue || (idea as any).pricingStrategy;
+      setShowAdvancedFields(hasAdvancedData);
     }
   }, [idea]);
 
@@ -137,6 +194,37 @@ export default function BusinessIdeaForm({ idea, onSave, onCancel }: BusinessIde
       newErrors.ongoingAnnualCost = 'Annual cost cannot be negative';
     }
 
+    // Advanced field validations
+    if (showAdvancedFields) {
+      if (formData.expectedMonthlyRevenue < 0) {
+        newErrors.expectedMonthlyRevenue = 'Expected monthly revenue cannot be negative';
+      }
+
+      if (formData.expectedAnnualRevenue < 0) {
+        newErrors.expectedAnnualRevenue = 'Expected annual revenue cannot be negative';
+      }
+
+      if (formData.customerAcquisitionCost < 0) {
+        newErrors.customerAcquisitionCost = 'Customer acquisition cost cannot be negative';
+      }
+
+      if (formData.customerLifetimeValue < 0) {
+        newErrors.customerLifetimeValue = 'Customer lifetime value cannot be negative';
+      }
+
+      if (formData.timeToMarket < 0) {
+        newErrors.timeToMarket = 'Time to market cannot be negative';
+      }
+
+      if (formData.teamSize < 0) {
+        newErrors.teamSize = 'Team size cannot be negative';
+      }
+
+      if (formData.fundingRequired < 0) {
+        newErrors.fundingRequired = 'Funding required cannot be negative';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -156,7 +244,7 @@ export default function BusinessIdeaForm({ idea, onSave, onCancel }: BusinessIde
           {idea ? 'Edit Business Idea' : 'New Business Idea'}
         </h2>
         <p className="text-sm text-gray-600 mt-1">
-          Fill in the details of your business concept
+          Fill in the details of your business concept. Advanced fields help pre-populate the modeling engine.
         </p>
       </div>
 
@@ -252,7 +340,7 @@ export default function BusinessIdeaForm({ idea, onSave, onCancel }: BusinessIde
           </div>
         </div>
 
-        {/* Financial Information */}
+        {/* Basic Financial Information */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -308,6 +396,247 @@ export default function BusinessIdeaForm({ idea, onSave, onCancel }: BusinessIde
             {errors.ongoingAnnualCost && <p className="text-red-500 text-xs mt-1">{errors.ongoingAnnualCost}</p>}
           </div>
         </div>
+
+        {/* Advanced Fields Toggle */}
+        <div className="border-t border-gray-200 pt-6">
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFields(!showAdvancedFields)}
+            className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-500"
+          >
+            {showAdvancedFields ? '▼' : '▶'} Advanced Business Modeling Fields
+            <span className="ml-2 text-xs text-gray-500">
+              (Optional - helps pre-populate advanced modeling)
+            </span>
+          </button>
+        </div>
+
+        {/* Advanced Fields */}
+        {showAdvancedFields && (
+          <div className="space-y-6 bg-blue-50 p-4 rounded-lg">
+            {/* Market Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Market Size
+                </label>
+                <select
+                  value={formData.marketSize}
+                  onChange={(e) => handleInputChange('marketSize', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select market size</option>
+                  {MARKET_SIZES.map(size => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Competitive Landscape
+                </label>
+                <select
+                  value={formData.competitiveLandscape}
+                  onChange={(e) => handleInputChange('competitiveLandscape', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select competitive landscape</option>
+                  {COMPETITIVE_LANDSCAPES.map(landscape => (
+                    <option key={landscape} value={landscape}>{landscape}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Unique Value Proposition
+              </label>
+              <textarea
+                value={formData.uniqueValueProposition}
+                onChange={(e) => handleInputChange('uniqueValueProposition', e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="What makes your business unique?"
+              />
+            </div>
+
+            {/* Revenue Projections */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Expected Monthly Revenue (£)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.expectedMonthlyRevenue}
+                  onChange={(e) => handleInputChange('expectedMonthlyRevenue', parseFloat(e.target.value) || 0)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.expectedMonthlyRevenue ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="0.00"
+                />
+                {errors.expectedMonthlyRevenue && <p className="text-red-500 text-xs mt-1">{errors.expectedMonthlyRevenue}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Expected Annual Revenue (£)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.expectedAnnualRevenue}
+                  onChange={(e) => handleInputChange('expectedAnnualRevenue', parseFloat(e.target.value) || 0)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.expectedAnnualRevenue ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="0.00"
+                />
+                {errors.expectedAnnualRevenue && <p className="text-red-500 text-xs mt-1">{errors.expectedAnnualRevenue}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Pricing Strategy
+              </label>
+              <textarea
+                value={formData.pricingStrategy}
+                onChange={(e) => handleInputChange('pricingStrategy', e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Describe your pricing approach..."
+              />
+            </div>
+
+            {/* Customer Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Customer Acquisition Cost (£)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.customerAcquisitionCost}
+                  onChange={(e) => handleInputChange('customerAcquisitionCost', parseFloat(e.target.value) || 0)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.customerAcquisitionCost ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="0.00"
+                />
+                {errors.customerAcquisitionCost && <p className="text-red-500 text-xs mt-1">{errors.customerAcquisitionCost}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Customer Lifetime Value (£)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.customerLifetimeValue}
+                  onChange={(e) => handleInputChange('customerLifetimeValue', parseFloat(e.target.value) || 0)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.customerLifetimeValue ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="0.00"
+                />
+                {errors.customerLifetimeValue && <p className="text-red-500 text-xs mt-1">{errors.customerLifetimeValue}</p>}
+              </div>
+            </div>
+
+            {/* Business Planning */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Time to Market (months)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.timeToMarket}
+                  onChange={(e) => handleInputChange('timeToMarket', parseInt(e.target.value) || 0)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.timeToMarket ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="0"
+                />
+                {errors.timeToMarket && <p className="text-red-500 text-xs mt-1">{errors.timeToMarket}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Team Size
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formData.teamSize}
+                  onChange={(e) => handleInputChange('teamSize', parseInt(e.target.value) || 0)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.teamSize ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="0"
+                />
+                {errors.teamSize && <p className="text-red-500 text-xs mt-1">{errors.teamSize}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Funding Required (£)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.fundingRequired}
+                  onChange={(e) => handleInputChange('fundingRequired', parseFloat(e.target.value) || 0)}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    errors.fundingRequired ? 'border-red-300' : 'border-gray-300'
+                  }`}
+                  placeholder="0.00"
+                />
+                {errors.fundingRequired && <p className="text-red-500 text-xs mt-1">{errors.fundingRequired}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Key Risks
+              </label>
+              <textarea
+                value={formData.keyRisks}
+                onChange={(e) => handleInputChange('keyRisks', e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="What are the main risks to this business?"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Success Metrics
+              </label>
+              <textarea
+                value={formData.successMetrics}
+                onChange={(e) => handleInputChange('successMetrics', e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="How will you measure success?"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Tags */}
         <div>
