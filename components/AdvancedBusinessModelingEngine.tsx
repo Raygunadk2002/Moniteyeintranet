@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BusinessIdea } from '../pages/business-ideas';
 import BusinessModelCharts from './BusinessModelCharts';
+import SensitivityAnalysis from './SensitivityAnalysis';
 
 // Enhanced business model types
 export type BusinessModelType = 
@@ -2387,31 +2388,19 @@ export default function AdvancedBusinessModelingEngine({
 
         {activeTab === 'analysis' && (
           <div className="space-y-6">
-            {/* Interactive Charts */}
-            <BusinessModelCharts 
-              forecastResults={forecastResults}
-              selectedModels={selectedModels}
-              launchYear={modelConfig.launchYear}
+            {/* Sensitivity Analysis Component */}
+            <SensitivityAnalysis 
+              baselineModel={modelConfig}
+              onExport={(format) => {
+                console.log(`Exporting in ${format} format`);
+                // Export functionality will be implemented
+              }}
             />
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-              <h3 className="text-lg font-medium text-yellow-800 mb-2">🚧 Advanced Analytics Coming Soon</h3>
-              <p className="text-yellow-700 mb-4">
-                Additional advanced features will include:
-              </p>
-              <ul className="list-disc list-inside text-yellow-700 space-y-1">
-                <li>Sensitivity analysis sliders (churn ±5%, CAC ±10%)</li>
-                <li>Scenario comparison (Base Case vs Aggressive Growth)</li>
-                <li>CAC vs LTV analysis</li>
-                <li>Monte Carlo simulations</li>
-                <li>Export to CSV, PDF, or Google Sheets</li>
-                <li>Integration with market benchmarks and APIs</li>
-              </ul>
-            </div>
-
+            {/* Key Metrics Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Key Metrics</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">📊 Key Business Metrics</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Time to Break-Even:</span>
@@ -2434,11 +2423,17 @@ export default function AdvancedBusinessModelingEngine({
                     <span className="text-gray-600">Total Investment Needed:</span>
                     <span className="font-medium">£{modelConfig.globalCosts.initialSetupCost.toLocaleString()}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">5-Year Revenue:</span>
+                    <span className="font-medium">
+                      £{forecastResults.reduce((sum, r) => sum + r.totalRevenue, 0).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
               </div>
 
               <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Model Performance</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">🎯 Model Performance</h3>
                 <div className="space-y-3">
                   {selectedModels.map(model => {
                     const modelRevenue = forecastResults.reduce((sum, r) => sum + (r.revenueByModel[model] || 0), 0);
@@ -2452,8 +2447,25 @@ export default function AdvancedBusinessModelingEngine({
                       </div>
                     );
                   })}
+                  
+                  <div className="pt-2 border-t border-gray-200">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Active Models:</span>
+                      <span className="font-medium">{selectedModels.length}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
+            </div>
+
+            {/* Interactive Charts */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">📈 Financial Projections</h3>
+              <BusinessModelCharts 
+                forecastResults={forecastResults}
+                selectedModels={selectedModels}
+                launchYear={modelConfig.launchYear}
+              />
             </div>
           </div>
         )}

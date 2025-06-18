@@ -78,32 +78,42 @@ async function handlePost(req: NextApiRequest, res: NextApiResponse, businessIde
       return res.status(403).json({ error: 'Business idea not found or access denied' });
     }
 
+    // Use upsert to handle both create and update
     const { data, error } = await supabaseAdmin
       .from('revenue_models')
-      .insert({
+      .upsert({
         business_idea_id: businessIdeaId,
         business_model: modelData.businessModel,
         parameters: modelData.parameters || {},
         growth_assumptions: modelData.growthAssumptions || {},
         forecast: modelData.forecast || {}
+      }, {
+        onConflict: 'business_idea_id',
+        ignoreDuplicates: false
       })
       .select()
       .single();
 
     if (error) {
-      console.error('Error creating revenue model:', error);
-      return res.status(500).json({ error: 'Failed to create revenue model' });
+      console.error('Error saving revenue model:', error);
+      return res.status(500).json({ 
+        error: 'Failed to save revenue model',
+        details: error.message 
+      });
     }
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       data: data,
-      message: 'Revenue model created successfully'
+      message: 'Revenue model saved successfully'
     });
 
   } catch (error) {
     console.error('Error in POST handler:', error);
-    return res.status(500).json({ error: 'Failed to create revenue model' });
+    return res.status(500).json({ 
+      error: 'Failed to save revenue model',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }
 

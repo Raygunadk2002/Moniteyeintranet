@@ -46,7 +46,9 @@ CREATE TABLE IF NOT EXISTS revenue_models (
   growth_assumptions JSONB,
   forecast JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  
+  CONSTRAINT revenue_models_business_idea_unique UNIQUE (business_idea_id)
 );
 
 -- Table to store advanced business model configurations
@@ -77,7 +79,8 @@ CREATE TABLE IF NOT EXISTS advanced_business_models (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   
   CONSTRAINT advanced_models_name_check CHECK (length(name) >= 3),
-  CONSTRAINT advanced_models_launch_year_check CHECK (launch_year >= 2020 AND launch_year <= 2050)
+  CONSTRAINT advanced_models_launch_year_check CHECK (launch_year >= 2020 AND launch_year <= 2050),
+  CONSTRAINT advanced_models_business_idea_unique UNIQUE (business_idea_id)
 );
 
 -- Create indexes for better performance
