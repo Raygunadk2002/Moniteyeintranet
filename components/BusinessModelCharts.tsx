@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -41,16 +41,31 @@ export default function BusinessModelCharts({
   selectedModels, 
   launchYear 
 }: BusinessModelChartsProps) {
+  // All hooks must be declared at the top level
   const revenueChartRef = useRef<ChartJS<'line'>>(null);
   const breakEvenChartRef = useRef<ChartJS<'line'>>(null);
   const customerChartRef = useRef<ChartJS<'line'>>(null);
+  const [chartsReady, setChartsReady] = useState(false);
+
+  // Initialize charts with delay to prevent DOM errors
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setChartsReady(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Cleanup charts on unmount
   useEffect(() => {
     return () => {
-      revenueChartRef.current?.destroy();
-      breakEvenChartRef.current?.destroy();
-      customerChartRef.current?.destroy();
+      try {
+        revenueChartRef.current?.destroy();
+        breakEvenChartRef.current?.destroy();
+        customerChartRef.current?.destroy();
+      } catch (error) {
+        console.warn('Chart cleanup error:', error);
+      }
     };
   }, []);
 
@@ -67,15 +82,25 @@ export default function BusinessModelCharts({
     }
   }, []);
 
+  // Early returns after all hooks are declared
+  if (!forecastResults || forecastResults.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        No forecast data available for charting.
+      </div>
+    );
+  }
+
+  if (!chartsReady) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <div className="animate-pulse">Loading charts...</div>
+      </div>
+    );
+  }
+
   // Prepare data for charts
   const prepareChartData = () => {
-    if (!forecastResults || forecastResults.length === 0) {
-      return {
-        revenueData: { labels: [], datasets: [] },
-        breakEvenData: { labels: [], datasets: [] },
-        customerData: { labels: [], datasets: [] }
-      };
-    }
 
     const months = forecastResults.map(result => 
       `${result.year}-${result.month.toString().padStart(2, '0')}`
@@ -129,14 +154,32 @@ export default function BusinessModelCharts({
           tension: 0.4,
         },
         {
+          label: 'Monthly Cash Flow',
+          data: forecastResults.map(result => result.cumulativeCashFlow),
+          borderColor: 'rgb(139, 92, 246)',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          fill: false,
+          tension: 0.4,
+          borderWidth: 3,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+        },
+        {
+          label: 'Break-Even Line',
+          data: forecastResults.map(() => 0),
+          borderColor: 'rgb(75, 85, 99)',
+          backgroundColor: 'transparent',
+          fill: false,
+          borderDash: [5, 5],
+          pointRadius: 0,
+          tension: 0,
+        },
+        {
           label: 'Net Profit',
           data: forecastResults.map(result => result.netProfit),
           borderColor: 'rgb(59, 130, 246)',
-          backgroundColor: (context: any) => {
-            const value = context.parsed?.y ?? context.raw;
-            return (value >= 0) ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)';
-          },
-          fill: true,
+          backgroundColor: 'rgba(16, 185, 129, 0.3)', // Green fill for positive area
+          fill: '+1', // Fill to the previous dataset (Break-Even Line)
           tension: 0.4,
         }
       ]
@@ -332,12 +375,28 @@ export default function BusinessModelCharts({
           </button>
         </div>
         <div className="h-96">
-          <Line 
-            ref={revenueChartRef}
-            key={`revenue-${(selectedModels || []).join('-')}-${forecastResults.length}`}
-            data={revenueData} 
-            options={revenueOptions} 
-          />
+          {(() => {
+            try {
+              return (
+                <Line 
+                  ref={revenueChartRef}
+                  key={`revenue-${(selectedModels || []).join('-')}-${forecastResults.length}`}
+                  data={revenueData} 
+                  options={revenueOptions} 
+                />
+              );
+            } catch (error) {
+              console.error('Revenue chart error:', error);
+              return (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <div className="text-4xl mb-2">⚠️</div>
+                    <div>Chart temporarily unavailable</div>
+                  </div>
+                </div>
+              );
+            }
+          })()}
         </div>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="bg-blue-50 p-3 rounded-lg">
@@ -371,12 +430,28 @@ export default function BusinessModelCharts({
           </button>
         </div>
         <div className="h-96">
-          <Line 
-            ref={breakEvenChartRef}
-            key={`breakeven-${(selectedModels || []).join('-')}-${forecastResults.length}`}
-            data={breakEvenData} 
-            options={breakEvenOptions} 
-          />
+          {(() => {
+            try {
+              return (
+                <Line 
+                  ref={breakEvenChartRef}
+                  key={`breakeven-${(selectedModels || []).join('-')}-${forecastResults.length}`}
+                  data={breakEvenData} 
+                  options={breakEvenOptions} 
+                />
+              );
+            } catch (error) {
+              console.error('Break-even chart error:', error);
+              return (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <div className="text-4xl mb-2">⚠️</div>
+                    <div>Chart temporarily unavailable</div>
+                  </div>
+                </div>
+              );
+            }
+          })()}
         </div>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="bg-green-50 p-3 rounded-lg">
@@ -418,12 +493,28 @@ export default function BusinessModelCharts({
           </button>
         </div>
         <div className="h-96">
-          <Line 
-            ref={customerChartRef}
-            key={`customer-${(selectedModels || []).join('-')}-${forecastResults.length}`}
-            data={customerData} 
-            options={customerOptions} 
-          />
+          {(() => {
+            try {
+              return (
+                <Line 
+                  ref={customerChartRef}
+                  key={`customer-${(selectedModels || []).join('-')}-${forecastResults.length}`}
+                  data={customerData} 
+                  options={customerOptions} 
+                />
+              );
+            } catch (error) {
+              console.error('Customer chart error:', error);
+              return (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <div className="text-4xl mb-2">⚠️</div>
+                    <div>Chart temporarily unavailable</div>
+                  </div>
+                </div>
+              );
+            }
+          })()}
         </div>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="bg-blue-50 p-3 rounded-lg">

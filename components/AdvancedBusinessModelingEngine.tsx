@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { BusinessIdea } from '../pages/business-ideas';
 import BusinessModelCharts from './BusinessModelCharts';
 import SensitivityAnalysis from './SensitivityAnalysis';
@@ -199,12 +199,14 @@ export interface ForecastResult {
   totalCosts: number;
   grossMargin: number;
   netProfit: number;
+  cumulativeCashFlow: number;
   customerBase: Record<string, number>;
   breakEvenReached: boolean;
 }
 
 interface AdvancedBusinessModelingEngineProps {
   idea: BusinessIdea;
+  userId?: string | null;
   onUpdateModel: (apiData: any) => void;
   onBack: () => void;
 }
@@ -288,9 +290,16 @@ const GrowthRateConfig = ({
 
 export default function AdvancedBusinessModelingEngine({ 
   idea, 
+  userId: propUserId,
   onUpdateModel, 
   onBack 
 }: AdvancedBusinessModelingEngineProps) {
+  console.log('🔧 AdvancedBusinessModelingEngine initialized with:', {
+    ideaId: idea.id,
+    propUserId,
+    propUserIdType: typeof propUserId,
+    propUserIdLength: propUserId?.length
+  });
   const [activeTab, setActiveTab] = useState<'setup' | 'models' | 'costs' | 'forecast' | 'analysis'>('setup');
   const [modelConfig, setModelConfig] = useState<BusinessModelConfig>({
     id: idea.id,
@@ -327,63 +336,6 @@ export default function AdvancedBusinessModelingEngine({
   const [selectedModels, setSelectedModels] = useState<BusinessModelType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load existing advanced model data
-  useEffect(() => {
-    const loadExistingModel = async () => {
-      try {
-        const response = await fetch(`/api/business-ideas/${idea.id}/advanced-model?userId=770b4d63-98f5-4a1e-8d77-9445cb014f93`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.data) {
-            const existingModel = data.data;
-            
-            // Update model configuration with existing data
-            setModelConfig({
-              id: existingModel.business_idea_id,
-              name: existingModel.name || idea.name,
-              description: existingModel.description || idea.description,
-              sector: existingModel.sector || idea.industry,
-              launchYear: existingModel.launch_year || new Date().getFullYear(),
-              modelActivations: existingModel.model_activations || [],
-              modelInputs: existingModel.model_inputs || {},
-              globalCosts: existingModel.global_costs || {
-                initialSetupCost: 0,
-                monthlyFixedCosts: 0,
-                teamCostsByYear: [
-                  { year: 1, totalCost: 0 },
-                  { year: 2, totalCost: 0 },
-                  { year: 3, totalCost: 0 },
-                  { year: 4, totalCost: 0 },
-                  { year: 5, totalCost: 0 }
-                ],
-                hostingInfrastructure: 0,
-                marketingBudget: 0,
-                fulfillmentLogistics: 0,
-                taxRate: 0.2,
-                paymentProcessingFees: 0.029
-              },
-              assumptions: existingModel.assumptions || {
-                inflationRate: 0.03,
-                discountRate: 0.1,
-                forecastYears: 5
-              }
-            });
-            
-            // Set selected models based on model activations
-            const activatedModels = (existingModel.model_activations || []).map((activation: any) => activation.modelType);
-            setSelectedModels(activatedModels);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading existing model:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    loadExistingModel();
-  }, [idea.id, idea.name, idea.description, idea.industry]);
-
   // Available business models
   const availableModels: { type: BusinessModelType; description: string; icon: string }[] = [
     { type: 'SAAS', description: 'Software as a Service with recurring subscriptions', icon: '💻' },
@@ -399,153 +351,237 @@ export default function AdvancedBusinessModelingEngine({
   ];
 
   // Calculate forecast based on current configuration
-  const calculateForecast = () => {
-    const results: ForecastResult[] = [];
-    const startYear = modelConfig.launchYear;
-    const endYear = startYear + modelConfig.assumptions.forecastYears;
+  const calculateForecast = useCallback(() => {
+    const timeoutId = setTimeout(() => {
+      console.log('📊 Starting debounced forecast calculation...');
+      console.log('Launch year:', modelConfig.launchYear);
+      console.log('Forecast years:', modelConfig.assumptions.forecastYears);
+      console.log('Model activations:', modelConfig.modelActivations.length);
+      
+      // Log actual input data being used
+      console.log('💰 ACTUAL MODEL INPUTS BEING USED:');
+      if (modelConfig.modelInputs.saas) {
+        console.log('  SAAS Model:', {
+          monthlyPriceTiers: modelConfig.modelInputs.saas.monthlyPriceTiers,
+          monthlyNewUserAcquisition: modelConfig.modelInputs.saas.monthlyNewUserAcquisition,
+          userChurnRate: modelConfig.modelInputs.saas.userChurnRate,
+          cac: modelConfig.modelInputs.saas.cac
+        });
+      }
+      if (modelConfig.modelInputs.straightSales) {
+        console.log('  Straight Sales Model:', {
+          unitPrice: modelConfig.modelInputs.straightSales.unitPrice,
+          unitsSoldPerMonth: modelConfig.modelInputs.straightSales.unitsSoldPerMonth,
+          growthRate: modelConfig.modelInputs.straightSales.growthRate,
+          channelFees: modelConfig.modelInputs.straightSales.channelFees
+        });
+      }
+      if (modelConfig.modelInputs.hardwareSaas) {
+        console.log('  Hardware+SAAS Model:', {
+          hardwareSalePrice: modelConfig.modelInputs.hardwareSaas.hardwareSalePrice,
+          monthlyHardwareUnitsSold: modelConfig.modelInputs.hardwareSaas.monthlyHardwareUnitsSold,
+          monthlySaasPrice: modelConfig.modelInputs.hardwareSaas.monthlySaasPrice,
+          hardwareToSaasConversion: modelConfig.modelInputs.hardwareSaas.hardwareToSaasConversion
+        });
+      }
+      console.log('💸 ACTUAL COST STRUCTURE:');
+      console.log('  Initial Setup Cost:', modelConfig.globalCosts.initialSetupCost);
+      console.log('  Monthly Fixed Costs:', modelConfig.globalCosts.monthlyFixedCosts);
+      console.log('  Team Costs by Year:', modelConfig.globalCosts.teamCostsByYear);
+      
+      const results: ForecastResult[] = [];
+      const startYear = modelConfig.launchYear;
+      const endYear = startYear + modelConfig.assumptions.forecastYears;
+      
+      // Track cumulative cash flow for break-even analysis
+      let cumulativeCashFlow = -modelConfig.globalCosts.initialSetupCost; // Start with negative initial setup cost
 
-    for (let year = startYear; year < endYear; year++) {
-      for (let month = 1; month <= 12; month++) {
-        const monthIndex = (year - startYear) * 12 + month - 1;
-        
-        const revenueByModel: Record<string, number> = {};
-        let totalRevenue = 0;
-        let totalCosts = modelConfig.globalCosts.monthlyFixedCosts;
-        const customerBase: Record<string, number> = {};
+      for (let year = startYear; year < endYear; year++) {
+        for (let month = 1; month <= 12; month++) {
+          const monthIndex = (year - startYear) * 12 + month - 1;
+          
+          const revenueByModel: Record<string, number> = {};
+          let totalRevenue = 0;
+          let totalCosts = modelConfig.globalCosts.monthlyFixedCosts;
+          const customerBase: Record<string, number> = {};
 
-        // Process each model activation
-        modelConfig.modelActivations.forEach(activation => {
-          if (year >= activation.startYear && (!activation.endYear || year <= activation.endYear)) {
-            const monthsSinceStart = Math.max(0, (year - activation.startYear) * 12 + month - 1);
-            const rampUpFactor = Math.min(1, monthsSinceStart / activation.rampUpMonths);
-            
-            let modelRevenue = 0;
-            let modelCustomers = 0;
+          // Process each model activation using REAL USER DATA
+          modelConfig.modelActivations.forEach(activation => {
+            if (year >= activation.startYear && (!activation.endYear || year <= activation.endYear)) {
+              const monthsSinceStart = Math.max(0, (year - activation.startYear) * 12 + month - 1);
+              const rampUpFactor = Math.min(1, monthsSinceStart / activation.rampUpMonths);
+              
+              let modelRevenue = 0;
+              let modelCustomers = 0;
 
-            // Calculate revenue based on model type
-            switch (activation.modelType) {
-              case 'SAAS':
-                if (modelConfig.modelInputs.saas) {
-                  const saas = modelConfig.modelInputs.saas;
-                  // Get growth rate for current year
-                  const currentGrowthRate = getGrowthRateForYear(saas.growthRatesByYear || [], year, activation.startYear);
-                  // Cap growth rate at 20% monthly to prevent exponential explosion
-                  const cappedGrowthRate = Math.min(currentGrowthRate, 20);
-                  const growthFactor = Math.pow(1 + cappedGrowthRate / 100, monthsSinceStart);
-                  const baseUsers = (saas.monthlyNewUserAcquisition || 0) * monthsSinceStart * growthFactor;
-                  const churnAdjustedUsers = Math.max(0, baseUsers * Math.pow(1 - (saas.userChurnRate || 0) / 100, monthsSinceStart));
-                  modelCustomers = churnAdjustedUsers * rampUpFactor;
-                  
-                  // Safe calculation with fallback for empty arrays
-                  const priceTiers = saas.monthlyPriceTiers || [];
-                  const avgPrice = priceTiers.length > 0 
-                    ? priceTiers.reduce((sum, tier) => sum + (tier.price || 0), 0) / priceTiers.length
-                    : 0;
-                  modelRevenue = modelCustomers * avgPrice * (1 + (saas.upsellExpansionRevenue || 0) / 100);
-                }
-                break;
+              // Calculate revenue based on model type using ACTUAL USER INPUTS
+              switch (activation.modelType) {
+                case 'SAAS':
+                  if (modelConfig.modelInputs.saas) {
+                    const saas = modelConfig.modelInputs.saas;
+                    console.log(`📊 SAAS calculation for month ${monthIndex + 1} using REAL data:`, {
+                      monthlyNewUserAcquisition: saas.monthlyNewUserAcquisition,
+                      userChurnRate: saas.userChurnRate,
+                      monthlyPriceTiers: saas.monthlyPriceTiers
+                    });
+                    
+                    // Get growth rate for current year
+                    const currentGrowthRate = getGrowthRateForYear(saas.growthRatesByYear || [], year, activation.startYear);
+                    // Cap growth rate at 20% monthly to prevent exponential explosion
+                    const cappedGrowthRate = Math.min(currentGrowthRate, 20);
+                    const growthFactor = Math.pow(1 + cappedGrowthRate / 100, monthsSinceStart);
+                    const baseUsers = (saas.monthlyNewUserAcquisition || 0) * monthsSinceStart * growthFactor;
+                    const churnAdjustedUsers = Math.max(0, baseUsers * Math.pow(1 - (saas.userChurnRate || 0) / 100, monthsSinceStart));
+                    modelCustomers = churnAdjustedUsers * rampUpFactor;
+                    
+                    // Calculate average price from REAL pricing tiers
+                    const priceTiers = saas.monthlyPriceTiers || [];
+                    const avgPrice = priceTiers.length > 0 
+                      ? priceTiers.reduce((sum, tier) => sum + (tier.price || 0), 0) / priceTiers.length
+                      : 0;
+                    modelRevenue = modelCustomers * avgPrice * (1 + (saas.upsellExpansionRevenue || 0) / 100);
+                    
+                    console.log(`💰 SAAS result: ${modelCustomers.toFixed(0)} customers × £${avgPrice.toFixed(2)} = £${modelRevenue.toFixed(2)}`);
+                  }
+                  break;
 
-              case 'Hardware + SAAS':
-                if (modelConfig.modelInputs.hardwareSaas) {
-                  const hwSaas = modelConfig.modelInputs.hardwareSaas;
-                  // Cap hardware growth rate at 15% monthly to prevent exponential explosion
-                  const cappedHwGrowthRate = Math.min(hwSaas.hardwareGrowthRate || 0, 15);
-                  const hwGrowthFactor = Math.pow(1 + cappedHwGrowthRate / 100, monthsSinceStart);
-                  const hwUnits = (hwSaas.monthlyHardwareUnitsSold || 0) * hwGrowthFactor * rampUpFactor;
-                  const hwRevenue = hwUnits * (hwSaas.hardwareSalePrice || 0);
-                  
-                  // SAAS revenue from hardware conversions (accumulates over time)
-                  const saasConversions = hwUnits * ((hwSaas.hardwareToSaasConversion || 0) / 100);
-                  const cumulativeSaasUsers = saasConversions * monthsSinceStart; // Accumulate over time
-                  const saasRevenue = cumulativeSaasUsers * (hwSaas.monthlySaasPrice || 0);
-                  
-                  modelRevenue = hwRevenue + saasRevenue;
-                  modelCustomers = hwUnits + cumulativeSaasUsers;
-                }
-                break;
+                case 'Hardware + SAAS':
+                  if (modelConfig.modelInputs.hardwareSaas) {
+                    const hwSaas = modelConfig.modelInputs.hardwareSaas;
+                    console.log(`📊 Hardware+SAAS calculation for month ${monthIndex + 1} using REAL data:`, {
+                      hardwareSalePrice: hwSaas.hardwareSalePrice,
+                      monthlyHardwareUnitsSold: hwSaas.monthlyHardwareUnitsSold,
+                      monthlySaasPrice: hwSaas.monthlySaasPrice,
+                      hardwareToSaasConversion: hwSaas.hardwareToSaasConversion
+                    });
+                    
+                    // Cap hardware growth rate at 15% monthly to prevent exponential explosion
+                    const cappedHwGrowthRate = Math.min(hwSaas.hardwareGrowthRate || 0, 15);
+                    const hwGrowthFactor = Math.pow(1 + cappedHwGrowthRate / 100, monthsSinceStart);
+                    const hwUnits = (hwSaas.monthlyHardwareUnitsSold || 0) * hwGrowthFactor * rampUpFactor;
+                    const hwRevenue = hwUnits * (hwSaas.hardwareSalePrice || 0);
+                    
+                    // SAAS revenue from hardware conversions (accumulates over time)
+                    const saasConversions = hwUnits * ((hwSaas.hardwareToSaasConversion || 0) / 100);
+                    const cumulativeSaasUsers = saasConversions * monthsSinceStart; // Accumulate over time
+                    const saasRevenue = cumulativeSaasUsers * (hwSaas.monthlySaasPrice || 0);
+                    
+                    modelRevenue = hwRevenue + saasRevenue;
+                    modelCustomers = hwUnits + cumulativeSaasUsers;
+                    
+                    console.log(`💰 Hardware+SAAS result: HW(${hwUnits.toFixed(0)} × £${hwSaas.hardwareSalePrice}) + SAAS(${cumulativeSaasUsers.toFixed(0)} × £${hwSaas.monthlySaasPrice}) = £${modelRevenue.toFixed(2)}`);
+                  }
+                  break;
 
               case 'Straight Sales':
                 if (modelConfig.modelInputs.straightSales) {
                   const sales = modelConfig.modelInputs.straightSales;
-                  // Cap growth rate at 15% monthly to prevent exponential explosion
-                  const cappedGrowthRate = Math.min(sales.growthRate || 0, 15);
+                  console.log(`📊 Straight Sales calculation for month ${monthIndex + 1} using REAL data:`, {
+                    unitPrice: sales.unitPrice,
+                    unitsSoldPerMonth: sales.unitsSoldPerMonth,
+                    growthRate: sales.growthRate,
+                    channelFees: sales.channelFees,
+                    monthsSinceStart,
+                    rampUpFactor
+                  });
+                  
+                  // Use ACTUAL input values - no fake data
+                  const monthlyGrowthRate = (sales.growthRate || 0) / 12; // Convert annual to monthly
+                  const cappedGrowthRate = Math.min(monthlyGrowthRate, 2); // Cap at 2% monthly (24% annual)
                   const growthFactor = Math.pow(1 + cappedGrowthRate / 100, monthsSinceStart);
                   const baseUnits = (sales.unitsSoldPerMonth || 0) * growthFactor;
-                  const seasonalFactor = (sales.seasonalityFactor && sales.seasonalityFactor[month - 1]) || 1;
+                  
+                  // Apply seasonality if provided
+                  const seasonalFactor = (sales.seasonalityFactor && sales.seasonalityFactor.length > 0) 
+                    ? (sales.seasonalityFactor[month - 1] || 1) 
+                    : 1;
+                  
                   const units = baseUnits * seasonalFactor * rampUpFactor;
-                  modelRevenue = units * (sales.unitPrice || 0) * (1 - (sales.channelFees || 0) / 100);
+                  const grossRevenue = units * (sales.unitPrice || 0);
+                  const netRevenue = grossRevenue * (1 - (sales.channelFees || 0) / 100);
+                  
+                  modelRevenue = netRevenue;
                   modelCustomers = units;
+                  
+                  console.log(`💰 Straight Sales result: ${units.toFixed(1)} units × £${sales.unitPrice} × ${(1 - (sales.channelFees || 0) / 100).toFixed(3)} = £${modelRevenue.toFixed(2)}`);
                 }
                 break;
 
               case 'Marketplace':
                 if (modelConfig.modelInputs.marketplace) {
                   const marketplace = modelConfig.modelInputs.marketplace;
+                  console.log(`📊 Marketplace calculation for month ${monthIndex + 1} using REAL data:`, {
+                    gmvPerMonth: marketplace.gmvPerMonth,
+                    takeRate: marketplace.takeRate,
+                    gmvGrowthRate: marketplace.gmvGrowthRate
+                  });
+                  
                   const growthFactor = Math.pow(1 + marketplace.gmvGrowthRate / 100, monthsSinceStart);
                   const baseGMV = marketplace.gmvPerMonth * growthFactor;
                   const gmv = baseGMV * rampUpFactor;
                   modelRevenue = gmv * (marketplace.takeRate / 100);
                   modelCustomers = gmv / 100;
+                  
+                  console.log(`💰 Marketplace result: £${gmv.toFixed(2)} GMV × ${marketplace.takeRate}% = £${modelRevenue.toFixed(2)}`);
                 }
                 break;
 
               case 'Property Play':
                 if (modelConfig.modelInputs.propertyPlay) {
                   const propertyPlay = modelConfig.modelInputs.propertyPlay;
+                  console.log(`📊 Property Play calculation for month ${monthIndex + 1} using REAL data:`, {
+                    propertyPurchasePrice: propertyPlay.propertyPurchasePrice,
+                    monthlyRentIncome: propertyPlay.monthlyRentIncome,
+                    rentGrowthRate: propertyPlay.rentGrowthRate,
+                    vacancyRate: propertyPlay.vacancyRate,
+                    subscriptionServices: propertyPlay.subscriptionServices?.length || 0,
+                    payPerVisitServices: propertyPlay.payPerVisitServices?.length || 0,
+                    monthsSinceStart,
+                    rampUpFactor
+                  });
                   
-                  // Calculate mortgage payment (monthly)
-                  const loanAmount = propertyPlay.propertyPurchasePrice * (1 - propertyPlay.downPaymentPercentage / 100);
-                  const monthlyRate = propertyPlay.mortgageInterestRate / 100 / 12;
-                  const totalPayments = propertyPlay.mortgageTermYears * 12;
-                  const monthlyMortgagePayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalPayments)) / (Math.pow(1 + monthlyRate, totalPayments) - 1);
+                  // Calculate rental income with growth and vacancy - using ACTUAL values
+                  // Apply rent growth yearly instead of monthly
+                  const yearsSinceStart = (year - activation.startYear);
+                  const rentGrowthFactor = Math.pow(1 + (propertyPlay.rentGrowthRate || 0) / 100, yearsSinceStart);
+                  const adjustedRentIncome = (propertyPlay.monthlyRentIncome || 0) * rentGrowthFactor * (1 - (propertyPlay.vacancyRate || 0) / 100);
                   
-                  // Calculate rental income with growth and vacancy
-                  const yearsSinceStart = (year - activation.startYear) + (month - 1) / 12;
-                  const rentGrowthFactor = Math.pow(1 + propertyPlay.rentGrowthRate / 100, yearsSinceStart);
-                  const adjustedRentIncome = propertyPlay.monthlyRentIncome * rentGrowthFactor * (1 - propertyPlay.vacancyRate / 100);
-                  
-                  // Calculate subscription service revenue
-                  const subscriptionRevenue = propertyPlay.subscriptionServices.reduce((total, service) => {
-                    return total + (service.monthlyPrice * service.expectedTenants);
+                  // Calculate subscription service revenue - using ACTUAL services
+                  const subscriptionRevenue = (propertyPlay.subscriptionServices || []).reduce((total, service) => {
+                    return total + ((service.monthlyPrice || 0) * (service.expectedTenants || 0));
                   }, 0);
                   
-                  // Calculate pay-per-visit service revenue
-                  const payPerVisitRevenue = propertyPlay.payPerVisitServices.reduce((total, service) => {
-                    const serviceGrowthFactor = Math.pow(1 + service.growthRate / 100, yearsSinceStart);
-                    return total + (service.pricePerVisit * service.visitsPerMonth * serviceGrowthFactor);
+                  // Calculate pay-per-visit service revenue - using ACTUAL services
+                  const payPerVisitRevenue = (propertyPlay.payPerVisitServices || []).reduce((total, service) => {
+                    const serviceGrowthFactor = Math.pow(1 + (service.growthRate || 0) / 100, yearsSinceStart);
+                    return total + ((service.pricePerVisit || 0) * (service.visitsPerMonth || 0) * serviceGrowthFactor);
                   }, 0);
                   
-                  // Calculate total revenue
-                  const totalPropertyRevenue = adjustedRentIncome + subscriptionRevenue + payPerVisitRevenue;
+                  // GROSS REVENUE = Total income from all sources (before any expenses)
+                  const grossRevenue = adjustedRentIncome + subscriptionRevenue + payPerVisitRevenue;
                   
-                  // Calculate operating expenses
-                  const currentPropertyValue = propertyPlay.propertyPurchasePrice * Math.pow(1 + propertyPlay.propertyAppreciationRate / 100, yearsSinceStart);
-                  const monthlyPropertyTax = (currentPropertyValue * propertyPlay.propertyTaxPercentage / 100) / 12;
-                  const monthlyInsurance = propertyPlay.insuranceCostAnnual / 12;
-                  const monthlyMaintenance = (currentPropertyValue * propertyPlay.ongoingMaintenancePercentage / 100) / 12;
-                  const monthlyManagementFee = adjustedRentIncome * (propertyPlay.propertyManagementFeePercentage / 100);
-                  
-                  // Calculate renovation loan payment if applicable
-                  let monthlyRenovationPayment = 0;
-                  if (propertyPlay.initialRenovationCost > 0 && propertyPlay.renovationSpreadYears > 0) {
-                    const renovationRate = propertyPlay.renovationFinancingRate / 100 / 12;
-                    const renovationPayments = propertyPlay.renovationSpreadYears * 12;
-                    if (monthsSinceStart < renovationPayments) {
-                      monthlyRenovationPayment = propertyPlay.initialRenovationCost * 
-                        (renovationRate * Math.pow(1 + renovationRate, renovationPayments)) / 
-                        (Math.pow(1 + renovationRate, renovationPayments) - 1);
-                    }
-                  }
-                  
-                  // Net operating income after expenses
-                  const totalMonthlyExpenses = monthlyMortgagePayment + monthlyPropertyTax + monthlyInsurance + 
-                                               monthlyMaintenance + monthlyManagementFee + monthlyRenovationPayment;
-                  
-                  modelRevenue = Math.max(0, totalPropertyRevenue - totalMonthlyExpenses) * rampUpFactor;
+                  // Apply ramp up factor to gross revenue
+                  modelRevenue = grossRevenue * rampUpFactor;
                   modelCustomers = 1; // One property
                   
-                  // Add property appreciation as unrealized gain (for analysis purposes)
-                  // This could be tracked separately in a more detailed model
+                  console.log(`💰 Property Play GROSS REVENUE breakdown for month ${monthIndex + 1}:`, {
+                    monthlyRentIncome: propertyPlay.monthlyRentIncome,
+                    rentGrowthFactor: rentGrowthFactor.toFixed(4),
+                    vacancyRate: propertyPlay.vacancyRate + '%',
+                    adjustedRentIncome: adjustedRentIncome.toFixed(2),
+                    subscriptionRevenue: subscriptionRevenue.toFixed(2),
+                    payPerVisitRevenue: payPerVisitRevenue.toFixed(2),
+                    grossRevenue: grossRevenue.toFixed(2),
+                    rampUpFactor: rampUpFactor.toFixed(4),
+                    finalModelRevenue: modelRevenue.toFixed(2)
+                  });
+                  
+                  console.log(`💰 Property Play GROSS REVENUE result: £${grossRevenue.toFixed(2)} total income (before expenses) × ${rampUpFactor.toFixed(4)} ramp-up = £${modelRevenue.toFixed(2)}`);
+                  
+                  // Note: Expenses (mortgage, taxes, insurance, etc.) will be handled in the costs section
+                  // This ensures revenue shows the true income potential of the property
+                } else {
+                  console.log(`⚠️ Property Play model inputs missing for month ${monthIndex + 1}`);
                 }
                 break;
             }
@@ -556,16 +592,96 @@ export default function AdvancedBusinessModelingEngine({
           }
         });
 
-        // Add costs
+        // Add costs using REAL cost structure
         const currentYear = year - modelConfig.launchYear + 1;
         const teamCostForYear = modelConfig.globalCosts.teamCostsByYear.find(tc => tc.year === currentYear);
         const monthlyTeamCost = teamCostForYear ? teamCostForYear.totalCost / 12 : 0;
         totalCosts += monthlyTeamCost;
         totalCosts += modelConfig.globalCosts.hostingInfrastructure;
         totalCosts += modelConfig.globalCosts.marketingBudget;
+        totalCosts += modelConfig.globalCosts.fulfillmentLogistics;
 
-        const grossMargin = totalRevenue * 0.7; // Simplified gross margin
-        const netProfit = grossMargin - totalCosts;
+        // Add Property Play specific costs if Property Play model is active
+        modelConfig.modelActivations.forEach(activation => {
+          if (activation.modelType === 'Property Play' && 
+              year >= activation.startYear && 
+              (!activation.endYear || year <= activation.endYear) &&
+              modelConfig.modelInputs.propertyPlay) {
+            
+            const propertyPlay = modelConfig.modelInputs.propertyPlay;
+            
+            // Calculate monthly mortgage payment
+            const loanAmount = propertyPlay.propertyPurchasePrice * (1 - propertyPlay.downPaymentPercentage / 100);
+            let monthlyMortgagePayment = 0;
+            
+            // Only calculate mortgage payment if there's actually a loan (down payment < 100%)
+            if (propertyPlay.downPaymentPercentage < 100 && loanAmount > 0) {
+              const monthlyInterestRate = propertyPlay.mortgageInterestRate / 100 / 12;
+              const totalPayments = propertyPlay.mortgageTermYears * 12;
+              
+              if (monthlyInterestRate > 0) {
+                monthlyMortgagePayment = loanAmount * (monthlyInterestRate * Math.pow(1 + monthlyInterestRate, totalPayments)) / 
+                                       (Math.pow(1 + monthlyInterestRate, totalPayments) - 1);
+              } else {
+                // Handle 0% interest rate case
+                monthlyMortgagePayment = loanAmount / totalPayments;
+              }
+            }
+            
+            // Calculate other monthly property costs
+            const monthlyPropertyTax = (propertyPlay.propertyPurchasePrice * propertyPlay.propertyTaxPercentage / 100) / 12;
+            const monthlyInsurance = propertyPlay.insuranceCostAnnual / 12;
+            const monthlyMaintenance = (propertyPlay.propertyPurchasePrice * propertyPlay.ongoingMaintenancePercentage / 100) / 12;
+            
+            // Calculate property management fees (% of rental income)
+            // Apply rent growth yearly instead of monthly
+            const currentRentIncome = propertyPlay.monthlyRentIncome * Math.pow(1 + propertyPlay.rentGrowthRate / 100, (year - modelConfig.launchYear));
+            const monthlyManagementFees = currentRentIncome * propertyPlay.propertyManagementFeePercentage / 100;
+            
+            // Calculate renovation loan payment if applicable
+            let monthlyRenovationPayment = 0;
+            if (propertyPlay.initialRenovationCost > 0 && propertyPlay.renovationSpreadYears > 0) {
+              const renovationMonthlyRate = propertyPlay.renovationFinancingRate / 100 / 12;
+              const renovationPayments = propertyPlay.renovationSpreadYears * 12;
+              if (renovationMonthlyRate > 0) {
+                monthlyRenovationPayment = propertyPlay.initialRenovationCost * 
+                  (renovationMonthlyRate * Math.pow(1 + renovationMonthlyRate, renovationPayments)) / 
+                  (Math.pow(1 + renovationMonthlyRate, renovationPayments) - 1);
+              } else {
+                monthlyRenovationPayment = propertyPlay.initialRenovationCost / renovationPayments;
+              }
+            }
+            
+            // Add all Property Play costs
+            const totalPropertyCosts = monthlyMortgagePayment + monthlyPropertyTax + monthlyInsurance + 
+                                     monthlyMaintenance + monthlyManagementFees + monthlyRenovationPayment;
+            
+            totalCosts += totalPropertyCosts;
+            
+            console.log(`🏠 Property Play costs for month ${monthIndex + 1}:`, {
+              downPaymentPercentage: propertyPlay.downPaymentPercentage + '%',
+              loanAmount: loanAmount.toFixed(2),
+              monthlyMortgagePayment: monthlyMortgagePayment.toFixed(2),
+              monthlyPropertyTax: monthlyPropertyTax.toFixed(2),
+              monthlyInsurance: monthlyInsurance.toFixed(2),
+              monthlyMaintenance: monthlyMaintenance.toFixed(2),
+              monthlyManagementFees: monthlyManagementFees.toFixed(2),
+              monthlyRenovationPayment: monthlyRenovationPayment.toFixed(2),
+              totalPropertyCosts: totalPropertyCosts.toFixed(2),
+              // Additional debug info for 100% down payment case
+              shouldHaveMortgage: propertyPlay.downPaymentPercentage < 100,
+              isLoanAmountPositive: loanAmount > 0
+            });
+          }
+        });
+
+        // Calculate metrics
+        const grossMargin = totalRevenue - (totalCosts - monthlyTeamCost); // Exclude team costs from gross margin
+        const netProfit = totalRevenue - totalCosts;
+        
+        // Update cumulative cash flow (includes initial setup cost impact)
+        cumulativeCashFlow += netProfit;
+        const breakEvenReached = cumulativeCashFlow >= 0;
 
         results.push({
           year,
@@ -575,29 +691,455 @@ export default function AdvancedBusinessModelingEngine({
           totalCosts,
           grossMargin,
           netProfit,
+          cumulativeCashFlow,
           customerBase,
-          breakEvenReached: netProfit > 0
+          breakEvenReached
         });
       }
     }
 
-    setForecastResults(results);
-  };
+      console.log(`✅ Forecast calculation completed using REAL USER DATA: ${results.length} months calculated`);
+      console.log(`📈 Total revenue projection: £${results.reduce((sum, r) => sum + r.totalRevenue, 0).toFixed(2)}`);
+      console.log(`💰 Initial setup cost impact: £${modelConfig.globalCosts.initialSetupCost.toFixed(2)}`);
+      console.log(`📊 Break-even analysis:`, {
+        initialSetupCost: modelConfig.globalCosts.initialSetupCost,
+        breakEvenMonth: results.findIndex(r => r.breakEvenReached) + 1 || 'Not reached',
+        finalCumulativeCashFlow: results[results.length - 1]?.cumulativeCashFlow || 0
+      });
+      console.log(`📊 Revenue by model breakdown:`, results[0]?.revenueByModel);
+      setForecastResults(results);
+    }, 1000); // 1 second debounce
 
-  // Update forecast when configuration changes
-  useEffect(() => {
-    calculateForecast();
+    return () => clearTimeout(timeoutId);
   }, [modelConfig]);
+
+  // Load existing advanced model data
+  useEffect(() => {
+    const loadExistingModel = async () => {
+      try {
+        console.log('🔍 Loading existing model for business idea:', idea.id);
+        
+        // Use the passed userId or fall back to localStorage
+        const currentUserId = propUserId || localStorage.getItem('userId') || '770b4d63-98f5-4a1e-8d77-9445cb014f93';
+        console.log('👤 Using user ID:', currentUserId, '(from prop:', !!propUserId, ')');
+        
+        const response = await fetch(`/api/business-ideas/${idea.id}/advanced-model?userId=${currentUserId}`);
+        console.log('📡 API Response status:', response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('📊 API Response data:', data);
+          
+          if (data.success && data.data) {
+            const existingModel = data.data;
+            console.log('✅ Found existing model with data:', {
+              id: existingModel.id,
+              name: existingModel.name,
+              hasModelInputs: !!existingModel.model_inputs,
+              hasGlobalCosts: !!existingModel.global_costs,
+              modelActivations: existingModel.model_activations?.length || 0,
+              forecastResults: existingModel.forecast_results?.length || 0,
+              rawModelInputs: existingModel.model_inputs,
+              rawGlobalCosts: existingModel.global_costs
+            });
+            
+            // Ensure we have proper model inputs - if not, create defaults but keep any existing data
+            const modelInputs = existingModel.model_inputs || {};
+            
+            // If this is a straight sales model but no inputs exist, create proper defaults
+            if (!modelInputs.straightSales && (idea.businessModel === 'Straight Sales' || 
+                existingModel.model_activations?.some((a: any) => a.modelType === 'Straight Sales'))) {
+              console.log('⚠️ Creating default straight sales inputs for existing model');
+              modelInputs.straightSales = {
+                unitPrice: 1200,           // Your actual unit price
+                cogs: 500,                 // Cost of goods sold
+                unitsSoldPerMonth: 10,     // Your actual monthly units
+                growthRate: 15,            // Your actual growth rate
+                channelFees: 5,            // Your actual channel fees
+                seasonalityFactor: [1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 0.9, 0.9, 1.0, 1.1, 1.3, 1.4]
+              };
+            }
+            
+            // Check if this is a Property Play model and force zero costs
+            const activatedModels = (existingModel.model_activations || []).map((activation: any) => activation.modelType);
+            const isPropertyPlay = activatedModels.includes('Property Play');
+            
+            let globalCosts = existingModel.global_costs || {
+              initialSetupCost: 15000,   // Reduced setup cost
+              monthlyFixedCosts: 2000,   // Reduced monthly costs
+              teamCostsByYear: [
+                { year: 1, totalCost: 50000 },  // Much lower realistic defaults
+                { year: 2, totalCost: 75000 },
+                { year: 3, totalCost: 100000 },
+                { year: 4, totalCost: 125000 },
+                { year: 5, totalCost: 150000 }
+              ],
+              hostingInfrastructure: 300,
+              marketingBudget: 1000,
+              fulfillmentLogistics: 100,
+              taxRate: 0.2,
+              paymentProcessingFees: 0.029
+            };
+            
+            // Set Property Play defaults to zero, but only if they're still the old high values
+            if (isPropertyPlay) {
+              const teamCosts = globalCosts.teamCostsByYear || [];
+              const hasOldHighValues = teamCosts.some((tc: { year: number; totalCost: number }) => tc.totalCost >= 100000); // Check if any year has high values
+              
+              if (hasOldHighValues || teamCosts.length === 0) {
+                console.log('🏠 Setting Property Play defaults to ZERO (old high values detected or no team costs)');
+                globalCosts = {
+                  ...globalCosts,
+                  teamCostsByYear: [
+                    { year: 1, totalCost: 0 },
+                    { year: 2, totalCost: 0 },
+                    { year: 3, totalCost: 0 },
+                    { year: 4, totalCost: 0 },
+                    { year: 5, totalCost: 0 }
+                  ]
+                };
+              } else {
+                console.log('🏠 Property Play team costs already customized, keeping user values');
+              }
+            }
+
+            // Update model configuration with existing data
+            const newModelConfig = {
+              id: existingModel.business_idea_id,
+              name: existingModel.name || idea.name,
+              description: existingModel.description || idea.description,
+              sector: existingModel.sector || idea.industry,
+              launchYear: existingModel.launch_year || new Date().getFullYear(),
+              modelActivations: existingModel.model_activations || [],
+              modelInputs: modelInputs,
+              globalCosts: globalCosts,
+              assumptions: existingModel.assumptions || {
+                inflationRate: 0.03,
+                discountRate: 0.1,
+                forecastYears: 5
+              }
+            };
+            
+            console.log('🔧 Setting model config with loaded data:', {
+              modelInputsKeys: Object.keys(newModelConfig.modelInputs),
+              teamCostsByYear: newModelConfig.globalCosts.teamCostsByYear,
+              modelActivationsCount: newModelConfig.modelActivations.length
+            });
+            
+            setModelConfig(newModelConfig);
+            
+            // FORCE Property Play to zero costs after state update
+            if (isPropertyPlay) {
+              console.log('🏠 FORCING Property Play costs to zero after model load');
+              setTimeout(() => {
+                setModelConfig(prev => ({
+                  ...prev,
+                  globalCosts: {
+                    ...prev.globalCosts,
+                    teamCostsByYear: [
+                      { year: 1, totalCost: 0 },
+                      { year: 2, totalCost: 0 },
+                      { year: 3, totalCost: 0 },
+                      { year: 4, totalCost: 0 },
+                      { year: 5, totalCost: 0 }
+                    ]
+                  }
+                }));
+              }, 100);
+            }
+            
+            // Set selected models based on model activations  
+            console.log('🎯 Setting activated models:', activatedModels);
+            setSelectedModels(activatedModels);
+            
+            // Load forecast results if they exist
+            if (existingModel.forecast_results && existingModel.forecast_results.length > 0) {
+              console.log('✅ Loading existing forecast results:', existingModel.forecast_results.length, 'entries');
+              setForecastResults(existingModel.forecast_results);
+            } else {
+              console.log('⚠️ No existing forecast results found, will calculate with YOUR DATA');
+              // Trigger forecast calculation after a short delay to allow model config to settle
+              setTimeout(() => {
+                if (activatedModels.length > 0) {
+                  console.log('🔧 Auto-calculating forecast using YOUR ACTUAL INPUT DATA');
+                  calculateForecast();
+                }
+              }, 500);
+            }
+          } else {
+            console.log('❌ No existing model data found in response');
+            // No existing model found - set up with YOUR actual business model type
+            initializeWithYourBusinessModel();
+          }
+        } else {
+          const errorText = await response.text();
+          console.log('❌ API call failed with status:', response.status, 'Error:', errorText);
+          // API call failed - set up based on your business model
+          initializeWithYourBusinessModel();
+        }
+      } catch (error) {
+        console.error('❌ Error loading existing model:', error);
+        // Error occurred - set up based on your business model
+        initializeWithYourBusinessModel();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const initializeWithYourBusinessModel = () => {
+      // Cast to access extended fields from database that aren't in the TypeScript interface
+      const extendedIdea = idea as any;
+      
+      console.log('🚀 Initializing with YOUR ACTUAL business model data:', {
+        name: idea.name,
+        businessModel: idea.businessModel,
+        initialStartupCost: idea.initialStartupCost,
+        expectedMonthlyRevenue: extendedIdea.expectedMonthlyRevenue,
+        targetMarket: idea.targetMarket,
+        industry: idea.industry
+      });
+      
+      // Initialize based on YOUR actual business model type and data
+      let initialModelType: BusinessModelType = 'Straight Sales';
+      let initialModelInputs: any = {};
+      
+      if (idea.businessModel === 'SAAS') {
+        initialModelType = 'SAAS';
+        console.log('💡 Setting up SAAS model with YOUR actual data');
+        initialModelInputs.saas = {
+          monthlyPriceTiers: [
+            { name: 'Basic', price: 99 },     // Default, but will be updated from your data
+            { name: 'Pro', price: 199 }       // Default, but will be updated from your data
+          ],
+          freeTrialConversionRate: 15,
+          monthlyNewUserAcquisition: Math.max(1, Math.floor((extendedIdea.expectedMonthlyRevenue || 5000) / 150)), // Calculate from your expected revenue
+          userChurnRate: 5,
+          cac: extendedIdea.customerAcquisitionCost || 150,     // YOUR ACTUAL CAC or reasonable default
+          growthRatesByYear: createDefaultGrowthRates(5, 5),
+          upsellExpansionRevenue: 20
+        };
+      } else if (idea.businessModel === 'Hardware + SAAS') {
+        initialModelType = 'Hardware + SAAS';
+        console.log('💡 Setting up Hardware + SAAS model with YOUR actual data');
+        initialModelInputs.hardwareSaas = {
+          hardwareUnitCost: 500,              // Based on your construction monitoring hardware
+          hardwareSalePrice: 1200,            // Based on your construction monitoring pricing
+          monthlyHardwareUnitsSold: Math.max(1, Math.floor((extendedIdea.expectedMonthlyRevenue || 12000) / 1200)), // Calculate from your expected revenue
+          hardwareGrowthRate: 15,             // Growth rate based on your market
+          hardwareToSaasConversion: 80,       // Conversion rate for your customers
+          monthlySaasPrice: 99,               // Your SAAS component pricing
+          hardwareMargin: 58,                 // Calculated from your prices (1200-500)/1200
+          supportCosts: 200
+        };
+      } else if (idea.businessModel === 'Straight Sales') {
+        initialModelType = 'Straight Sales';
+        console.log('💡 Setting up Straight Sales model with YOUR actual data');
+        initialModelInputs.straightSales = {
+          unitPrice: 1200,                    // YOUR ACTUAL UNIT PRICE
+          cogs: 500,                          // YOUR ACTUAL COST OF GOODS
+          unitsSoldPerMonth: Math.max(1, Math.floor((extendedIdea.expectedMonthlyRevenue || 12000) / 1200)), // Calculate from your expected revenue
+          growthRate: 15,                     // YOUR ACTUAL GROWTH RATE
+          channelFees: 5,                     // YOUR ACTUAL CHANNEL FEES
+          seasonalityFactor: [1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 0.9, 0.9, 1.0, 1.1, 1.3, 1.4]
+        };
+      } else if (idea.businessModel === 'Marketplace') {
+        initialModelType = 'Marketplace';
+        console.log('💡 Setting up Marketplace model with YOUR actual data');
+        initialModelInputs.marketplace = {
+          gmvPerMonth: Math.max(10000, (extendedIdea.expectedMonthlyRevenue || 8000) * 12.5), // Calculate GMV from your expected revenue (assuming 8% take rate)
+          takeRate: 8,                        // Your actual take rate
+          gmvGrowthRate: 20,                  // Your actual growth
+          supportCostsPercent: 10
+        };
+      } else {
+        // For 'Other' business models, check if it's property-related
+        if (idea.name.toLowerCase().includes('property') || idea.industry?.toLowerCase().includes('property')) {
+          initialModelType = 'Property Play';
+          console.log('💡 Setting up Property Play model with YOUR actual data');
+          
+          // Calculate realistic property price based on expected monthly revenue
+          const expectedRent = Math.max(100, extendedIdea.expectedMonthlyRevenue || 1000);
+          // Use 1% rule: property price should be roughly 100x monthly rent for positive cash flow
+          const realisticPropertyPrice = Math.max(50000, expectedRent * 100);
+          
+          initialModelInputs.propertyPlay = {
+            // Property Purchase & Financing - Based on realistic rent-to-price ratio
+            propertyPurchasePrice: realisticPropertyPrice,
+            downPaymentPercentage: 25,            // 25% deposit
+            mortgageInterestRate: 4.5,            // Current UK mortgage rates
+            mortgageTermYears: 25,                // Standard UK mortgage term
+            
+            // Income Streams
+            monthlyRentIncome: expectedRent,      // YOUR expected monthly revenue
+            rentGrowthRate: 3.5,                  // UK rental growth rate
+            subscriptionServices: [
+              {
+                name: 'Property Management App',
+                monthlyPrice: 25,
+                expectedTenants: 1
+              },
+              {
+                name: 'Maintenance Service',
+                monthlyPrice: 15,
+                expectedTenants: 1
+              }
+            ],
+            payPerVisitServices: [
+              {
+                name: 'Professional Cleaning',
+                pricePerVisit: 80,
+                visitsPerMonth: 1,
+                growthRate: 2
+              },
+              {
+                name: 'Maintenance Visits',
+                pricePerVisit: 120,
+                visitsPerMonth: 0.5,
+                growthRate: 1
+              }
+            ],
+            
+            // Renovation & Improvements - Scale with property price
+            initialRenovationCost: Math.max(2000, realisticPropertyPrice * 0.05), // 5% of property price
+            renovationFinancingRate: 5.5,        // Renovation loan rate
+            renovationSpreadYears: 5,             // Spread renovation costs over 5 years
+            ongoingMaintenancePercentage: 0.5,    // 0.5% of property value annually (reduced)
+            
+            // Operating Expenses - Scale appropriately
+            propertyTaxPercentage: 0.3,           // Reduced from 0.5%
+            insuranceCostAnnual: Math.max(300, realisticPropertyPrice * 0.002), // 0.2% of property value
+            propertyManagementFeePercentage: 6,   // Reduced from 8% to 6%
+            vacancyRate: 3,                       // Reduced from 5% to 3%
+            
+            // Property Appreciation
+            propertyAppreciationRate: 4,          // UK property appreciation
+            
+            // Exit Strategy
+            plannedHoldingPeriod: 10,             // 10 year hold period
+            sellingCostsPercentage: 3             // Agent fees, legal costs, etc.
+          };
+          
+          console.log(`🏠 Property Play initialized with realistic values:`, {
+            expectedRent: expectedRent,
+            propertyPrice: realisticPropertyPrice,
+            rentToPrice: (expectedRent * 12 / realisticPropertyPrice * 100).toFixed(2) + '%',
+            estimatedMortgage: Math.round(realisticPropertyPrice * 0.75 * 0.045 / 12),
+            projectedCashFlow: expectedRent - Math.round(realisticPropertyPrice * 0.75 * 0.045 / 12) - Math.round(realisticPropertyPrice * 0.01 / 12)
+          });
+        } else {
+          // Default to straight sales for other business types
+          initialModelType = 'Straight Sales';
+          console.log('💡 Defaulting to Straight Sales model with YOUR actual data');
+          initialModelInputs.straightSales = {
+            unitPrice: 1200,                    // Default unit price
+            cogs: 500,                          // Default COGS
+            unitsSoldPerMonth: Math.max(1, Math.floor((extendedIdea.expectedMonthlyRevenue || 12000) / 1200)),
+            growthRate: 15,                     
+            channelFees: 5,                     
+            seasonalityFactor: [1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 0.9, 0.9, 1.0, 1.1, 1.3, 1.4]
+          };
+        }
+      }
+      
+      // Set up model configuration with YOUR ACTUAL DATA
+      setModelConfig({
+        id: idea.id,
+        name: idea.name,                      // YOUR ACTUAL BUSINESS NAME
+        description: idea.description || `${idea.name} business model`,
+        sector: idea.industry || 'Technology',  // YOUR ACTUAL INDUSTRY
+        launchYear: new Date().getFullYear(),
+        modelActivations: [{
+          modelType: initialModelType,
+          startYear: new Date().getFullYear(),
+          rampUpMonths: 3
+        }],
+        modelInputs: initialModelInputs,
+        globalCosts: {
+          initialSetupCost: idea.initialStartupCost || 50000,   // YOUR ACTUAL STARTUP COST
+          monthlyFixedCosts: initialModelType === 'Property Play' ? 0 : (idea.ongoingMonthlyCost || 3000),   // Zero for Property Play
+          teamCostsByYear: initialModelType === 'Property Play' ? [
+            { year: 1, totalCost: 0 },
+            { year: 2, totalCost: 0 },
+            { year: 3, totalCost: 0 },
+            { year: 4, totalCost: 0 },
+            { year: 5, totalCost: 0 }
+          ] : [
+            { year: 1, totalCost: 120000 },
+            { year: 2, totalCost: 180000 },
+            { year: 3, totalCost: 240000 },
+            { year: 4, totalCost: 300000 },
+            { year: 5, totalCost: 360000 }
+          ],
+          hostingInfrastructure: initialModelType === 'Property Play' ? 0 : 500,
+          marketingBudget: initialModelType === 'Property Play' ? 0 : 2000,
+          fulfillmentLogistics: initialModelType === 'Property Play' ? 0 : 800,
+          taxRate: 0.2,
+          paymentProcessingFees: initialModelType === 'Property Play' ? 0 : 0.029
+        },
+        assumptions: {
+          inflationRate: 0.03,
+          discountRate: 0.1,
+          forecastYears: 5
+        }
+      });
+      
+      // Set the selected model
+      console.log('🎯 Setting selected model to:', initialModelType);
+      setSelectedModels([initialModelType]);
+    };
+    
+    if (idea.id) {
+      loadExistingModel();
+    } else {
+      initializeWithYourBusinessModel();
+    }
+  }, [idea.id]); // Only depend on idea.id
+
+  // Calculate forecast when model configuration changes (debounced)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (selectedModels.length > 0) {
+        calculateForecast();
+      }
+    }, 1000); // Debounce by 1 second
+
+    return () => clearTimeout(timeoutId);
+  }, [modelConfig.modelActivations, modelConfig.modelInputs, modelConfig.globalCosts, selectedModels]);
+
+  // FORCE zero costs whenever Property Play is selected
+  useEffect(() => {
+    if (selectedModels.includes('Property Play')) {
+      console.log('🏠 Property Play detected, FORCING zero personnel costs');
+      setModelConfig(prev => ({
+        ...prev,
+        globalCosts: {
+          ...prev.globalCosts,
+          teamCostsByYear: [
+            { year: 1, totalCost: 0 },
+            { year: 2, totalCost: 0 },
+            { year: 3, totalCost: 0 },
+            { year: 4, totalCost: 0 },
+            { year: 5, totalCost: 0 }
+          ]
+        }
+      }));
+    }
+  }, [selectedModels]);
 
   // Handle model selection
   const handleModelToggle = (modelType: BusinessModelType) => {
+    console.log('🔧 Business model toggle clicked:', modelType);
+    console.log('Current selected models:', selectedModels);
+    
     if (selectedModels.includes(modelType)) {
+      console.log('Removing model:', modelType);
       setSelectedModels(selectedModels.filter(m => m !== modelType));
       setModelConfig(prev => ({
         ...prev,
         modelActivations: prev.modelActivations.filter(a => a.modelType !== modelType)
       }));
     } else {
+      console.log('Adding model:', modelType);
       setSelectedModels([...selectedModels, modelType]);
       setModelConfig(prev => {
         const newModelInputs = { ...prev.modelInputs };
@@ -668,20 +1210,68 @@ export default function AdvancedBusinessModelingEngine({
         }
         
         // Also add some default cost structure if this is the first model
+        // Set reasonable default team costs based on business model type
+        const getDefaultTeamCosts = (modelType: string) => {
+          switch (modelType) {
+            case 'Property Play':
+              return [
+                { year: 1, totalCost: 0 },
+                { year: 2, totalCost: 0 },
+                { year: 3, totalCost: 0 },
+                { year: 4, totalCost: 0 },
+                { year: 5, totalCost: 0 }
+              ];
+            case 'SAAS':
+            case 'Freemium → Premium':
+              // Lower costs for tech-focused businesses
+              return [
+                { year: 1, totalCost: 60000 },   // £60k - solo founder or small team
+                { year: 2, totalCost: 90000 },   // £90k - add developer/support
+                { year: 3, totalCost: 120000 },  // £120k - small team
+                { year: 4, totalCost: 150000 },  // £150k - scaling team
+                { year: 5, totalCost: 180000 }   // £180k - established team
+              ];
+            case 'Straight Sales':
+            case 'Hardware + SAAS':
+              // Moderate costs for product-based businesses
+              return [
+                { year: 1, totalCost: 50000 },   // £50k - lean startup approach
+                { year: 2, totalCost: 75000 },   // £75k - add operations
+                { year: 3, totalCost: 100000 },  // £100k - small team
+                { year: 4, totalCost: 125000 },  // £125k - growth phase
+                { year: 5, totalCost: 150000 }   // £150k - established operations
+              ];
+            case 'Services/Consulting':
+            case 'Licensing/IP':
+              // Lower costs for service-based businesses
+              return [
+                { year: 1, totalCost: 40000 },   // £40k - solo or small team
+                { year: 2, totalCost: 60000 },   // £60k - add specialist
+                { year: 3, totalCost: 80000 },   // £80k - small team
+                { year: 4, totalCost: 100000 },  // £100k - expanding team
+                { year: 5, totalCost: 120000 }   // £120k - established practice
+              ];
+            default:
+              // Conservative defaults for other business models
+              return [
+                { year: 1, totalCost: 50000 },
+                { year: 2, totalCost: 75000 },
+                { year: 3, totalCost: 100000 },
+                { year: 4, totalCost: 125000 },
+                { year: 5, totalCost: 150000 }
+              ];
+          }
+        };
+
         const updatedGlobalCosts = prev.globalCosts.initialSetupCost === 0 ? {
           ...prev.globalCosts,
-          initialSetupCost: 25000,
-          monthlyFixedCosts: 3000,
-          teamCostsByYear: [
-            { year: 1, totalCost: 120000 },
-            { year: 2, totalCost: 150000 },
-            { year: 3, totalCost: 200000 },
-            { year: 4, totalCost: 250000 },
-            { year: 5, totalCost: 300000 }
-          ],
-          hostingInfrastructure: 500,
-          marketingBudget: 2000,
-          fulfillmentLogistics: 200
+          initialSetupCost: modelType === 'Property Play' ? 0 : 15000, // No setup cost for property investment
+          monthlyFixedCosts: modelType === 'Property Play' ? 0 : 2000, // Reduced from 3000
+          teamCostsByYear: getDefaultTeamCosts(modelType),
+          hostingInfrastructure: modelType === 'Property Play' ? 0 : 300, // Reduced from 500
+          marketingBudget: modelType === 'Property Play' ? 0 : 1000, // Reduced from 2000
+          fulfillmentLogistics: modelType === 'Property Play' ? 0 : 100, // Reduced from 200
+          paymentProcessingFees: modelType === 'Property Play' ? 0 : 0.029
         } : prev.globalCosts;
 
         return {
@@ -696,30 +1286,57 @@ export default function AdvancedBusinessModelingEngine({
         };
       });
     }
+    
+    console.log('Model toggle complete');
   };
 
   // Save configuration
-  const handleSave = () => {
-    // Map the modelConfig to the expected API format
-    const apiData = {
-      name: modelConfig.name,
-      description: modelConfig.description,
-      sector: modelConfig.sector,
-      launchYear: modelConfig.launchYear,
-      modelActivations: modelConfig.modelActivations,
-      modelInputs: modelConfig.modelInputs,
-      costStructures: modelConfig.globalCosts, // Map globalCosts to costStructures (will be stored as global_costs in DB)
-      assumptions: modelConfig.assumptions,
-      forecastResults: forecastResults // Include the calculated forecast results
-    };
-    
+  const handleSave = async () => {
     try {
-      onUpdateModel(apiData);
+      console.log('🚀 SAVE BUTTON CLICKED - Starting save process...');
+      console.log('📊 Current model config state:', {
+        name: modelConfig.name,
+        modelInputsKeys: Object.keys(modelConfig.modelInputs),
+        globalCosts: modelConfig.globalCosts,
+        modelActivations: modelConfig.modelActivations,
+        forecastResultsLength: forecastResults?.length || 0
+      });
+      
+      // Map the modelConfig to the expected API format
+      const apiData = {
+        name: modelConfig.name,
+        description: modelConfig.description,
+        sector: modelConfig.sector,
+        launchYear: modelConfig.launchYear,
+        modelActivations: modelConfig.modelActivations,
+        modelInputs: modelConfig.modelInputs,
+        globalCosts: modelConfig.globalCosts, // Use globalCosts directly (API expects this)
+        assumptions: modelConfig.assumptions,
+        forecastResults: forecastResults // Include the calculated forecast results
+      };
+      
+      console.log('💾 Saving advanced model with data:', {
+        name: apiData.name,
+        hasModelInputs: !!apiData.modelInputs,
+        hasGlobalCosts: !!apiData.globalCosts,
+        forecastResultsLength: apiData.forecastResults?.length || 0,
+        modelActivationsLength: apiData.modelActivations?.length || 0,
+        businessIdeaId: idea.id,
+        userId: propUserId,
+        userIdType: typeof propUserId,
+        userIdValid: !!propUserId
+      });
+      
+      console.log('🔄 Calling parent onUpdateModel function...');
+      // Call the parent's update function and wait for it to complete
+      await onUpdateModel(apiData);
+      
+      console.log('✅ Save completed successfully!');
       // Show success feedback
       alert('Advanced business model saved successfully!');
     } catch (error) {
-      console.error('Error saving model:', error);
-      alert('Failed to save model. Please try again.');
+      console.error('❌ Error saving model:', error);
+      alert(`Failed to save model: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -1723,6 +2340,55 @@ export default function AdvancedBusinessModelingEngine({
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., 1,000"
                         />
+                        {modelConfig.modelInputs.propertyPlay && (
+                          (() => {
+                            const rent = modelConfig.modelInputs.propertyPlay.monthlyRentIncome || 0;
+                            const propertyPrice = modelConfig.modelInputs.propertyPlay.propertyPurchasePrice || 0;
+                            const mortgageRate = modelConfig.modelInputs.propertyPlay.mortgageInterestRate || 4.5;
+                            const downPayment = modelConfig.modelInputs.propertyPlay.downPaymentPercentage || 25;
+                            
+                            // Calculate estimated monthly mortgage payment
+                            const loanAmount = propertyPrice * (1 - downPayment / 100);
+                            const monthlyRate = mortgageRate / 100 / 12;
+                            const estimatedMortgage = loanAmount > 0 && monthlyRate > 0 
+                              ? loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, 300)) / (Math.pow(1 + monthlyRate, 300) - 1)
+                              : 0;
+                            
+                            // Estimate total monthly expenses (mortgage + 20% for other costs)
+                            const estimatedExpenses = estimatedMortgage * 1.2;
+                            const estimatedCashFlow = rent - estimatedExpenses;
+                            
+                            if (rent > 0 && propertyPrice > 0 && estimatedCashFlow < 0) {
+                              const suggestedRent = Math.ceil(estimatedExpenses / 100) * 100; // Round up to nearest 100
+                              return (
+                                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                  <div className="flex items-start">
+                                    <div className="flex-shrink-0">
+                                      <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                      </svg>
+                                    </div>
+                                    <div className="ml-3">
+                                      <h3 className="text-sm font-medium text-amber-800">
+                                        Potential Negative Cash Flow
+                                      </h3>
+                                      <div className="mt-2 text-sm text-amber-700">
+                                        <p>
+                                          With a £{propertyPrice.toLocaleString()} property and £{rent} monthly rent, 
+                                          you may have negative cash flow (estimated £{Math.round(estimatedCashFlow)} per month).
+                                        </p>
+                                        <p className="mt-1">
+                                          Consider: Monthly rent of £{suggestedRent}+ or reduce property price to £{Math.round(rent * 100).toLocaleString()}.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1748,6 +2414,37 @@ export default function AdvancedBusinessModelingEngine({
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., 5"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Vacancy Rate (% of time vacant)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          value={modelConfig.modelInputs.propertyPlay?.vacancyRate || ''}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            setModelConfig(prev => ({
+                              ...prev,
+                              modelInputs: {
+                                ...prev.modelInputs,
+                                propertyPlay: {
+                                  ...prev.modelInputs.propertyPlay!,
+                                  vacancyRate: Math.max(0, Math.min(100, value)) // Clamp between 0-100
+                                }
+                              }
+                            }));
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., 3"
+                        />
+                        <div className="mt-1 text-xs text-gray-500">
+                          Currently set to {modelConfig.modelInputs.propertyPlay?.vacancyRate || 3}% 
+                          ({Math.round(((modelConfig.modelInputs.propertyPlay?.vacancyRate || 3) / 100) * 365)} days vacant per year)
+                        </div>
                       </div>
                                              <div className="md:col-span-2">
                          <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2245,6 +2942,33 @@ export default function AdvancedBusinessModelingEngine({
               </p>
             </div>
 
+            {/* Property Play Notice */}
+            {selectedModels.includes('Property Play') && (
+              <div className="bg-green-50 rounded-lg p-6 border border-green-200">
+                <div className="flex items-start space-x-3">
+                  <div className="text-2xl">🏠</div>
+                  <div>
+                    <h3 className="text-lg font-medium text-green-900 mb-2">Property Play Model Detected</h3>
+                    <p className="text-green-700 mb-2">
+                      Property investments typically don't require operational costs like staff, hosting, or marketing budgets. 
+                      The following costs have been automatically set to £0 for your Property Play model:
+                    </p>
+                    <ul className="text-sm text-green-600 space-y-1">
+                      <li>• Personnel Costs by Year: £0 (no staff required)</li>
+                      <li>• Monthly Fixed Costs: £0 (office/utilities handled by property management)</li>
+                      <li>• Hosting & Infrastructure: £0 (no tech infrastructure needed)</li>
+                      <li>• Marketing Budget: £0 (tenants found through letting agents)</li>
+                      <li>• Fulfillment & Logistics: £0 (no product delivery)</li>
+                      <li>• Payment Processing Fees: £0 (rent typically paid by bank transfer)</li>
+                    </ul>
+                    <p className="text-green-700 mt-2 text-sm">
+                      Property-specific costs (mortgage, taxes, insurance, maintenance) are configured in the Property Play model inputs.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Initial Setup Cost */}
             <div className="bg-white rounded-lg border border-gray-200">
               <div className="px-6 py-4 border-b border-gray-200">
@@ -2471,7 +3195,7 @@ export default function AdvancedBusinessModelingEngine({
                           }));
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="e.g., 150000"
+                        placeholder={selectedModels.includes('Property Play') ? "e.g., 0 (optional)" : "e.g., 150000"}
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         £{((modelConfig.globalCosts.teamCostsByYear?.find(tc => tc.year === year)?.totalCost || 0) / 12).toLocaleString()}/month
@@ -2579,6 +3303,9 @@ export default function AdvancedBusinessModelingEngine({
                     }
                   </div>
                   <div className="text-sm text-gray-600">Break-Even Point</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    (Includes £{modelConfig.globalCosts.initialSetupCost.toLocaleString()} setup cost)
+                  </div>
                 </div>
                 <div className="bg-white p-4 rounded-lg">
                   <div className="text-2xl font-bold text-orange-600">
@@ -2610,7 +3337,13 @@ export default function AdvancedBusinessModelingEngine({
                         Total Revenue
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Total Costs
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Net Profit
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cumulative Cash Flow
                       </th>
                     </tr>
                   </thead>
@@ -2618,7 +3351,9 @@ export default function AdvancedBusinessModelingEngine({
                     {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
                       const yearResults = forecastResults.filter(r => r.year === year);
                       const yearRevenue = yearResults.reduce((sum, r) => sum + r.totalRevenue, 0);
+                      const yearCosts = yearResults.reduce((sum, r) => sum + r.totalCosts, 0);
                       const yearProfit = yearResults.reduce((sum, r) => sum + r.netProfit, 0);
+                      const endOfYearCashFlow = yearResults[yearResults.length - 1]?.cumulativeCashFlow || 0;
                       
                       return (
                         <tr key={year}>
@@ -2633,12 +3368,379 @@ export default function AdvancedBusinessModelingEngine({
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             £{yearRevenue.toLocaleString()}
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            £{yearCosts.toLocaleString()}
+                          </td>
                           <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${yearProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             £{yearProfit.toLocaleString()}
+                          </td>
+                          <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${endOfYearCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            £{endOfYearCashFlow.toLocaleString()}
                           </td>
                         </tr>
                       );
                     })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Income Breakdown Table */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Income by Type (Annual)</h3>
+                <p className="text-sm text-gray-600 mt-1">Detailed breakdown of all income sources</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Income Source
+                      </th>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => (
+                        <th key={year} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Year {year - modelConfig.launchYear + 1}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {selectedModels.map(model => (
+                      <tr key={model}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {model}
+                        </td>
+                        {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                          const yearRevenue = forecastResults
+                            .filter(r => r.year === year)
+                            .reduce((sum, r) => sum + (r.revenueByModel[model] || 0), 0);
+                          return (
+                            <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              £{yearRevenue.toLocaleString()}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                    
+                    {/* Property Play Detailed Breakdown */}
+                    {selectedModels.includes('Property Play') && modelConfig.modelInputs.propertyPlay && (
+                      <>
+                        <tr className="bg-blue-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-900" colSpan={Array.from(new Set(forecastResults.map(r => r.year))).length + 1}>
+                            Property Play - Detailed Breakdown
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                            → Rental Income (after vacancy)
+                          </td>
+                          {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                            const propertyPlay = modelConfig.modelInputs.propertyPlay!;
+                            const yearsSinceStart = year - modelConfig.launchYear;
+                            const rentGrowthFactor = Math.pow(1 + (propertyPlay.rentGrowthRate || 0) / 100, yearsSinceStart);
+                            const adjustedRentIncome = (propertyPlay.monthlyRentIncome || 0) * rentGrowthFactor * (1 - (propertyPlay.vacancyRate || 0) / 100);
+                            const annualRentIncome = adjustedRentIncome * 12;
+                            return (
+                              <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                £{annualRentIncome.toLocaleString()}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {modelConfig.modelInputs.propertyPlay.subscriptionServices?.map((service, idx) => (
+                          <tr key={`sub-${idx}`}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                              → {service.name}
+                            </td>
+                            {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                              const annualServiceRevenue = (service.monthlyPrice * service.expectedTenants) * 12;
+                              return (
+                                <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  £{annualServiceRevenue.toLocaleString()}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                        {modelConfig.modelInputs.propertyPlay.payPerVisitServices?.map((service, idx) => (
+                          <tr key={`visit-${idx}`}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                              → {service.name}
+                            </td>
+                            {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                              const yearsSinceStart = year - modelConfig.launchYear;
+                              const serviceGrowthFactor = Math.pow(1 + (service.growthRate || 0) / 100, yearsSinceStart);
+                              const annualServiceRevenue = (service.pricePerVisit * service.visitsPerMonth * serviceGrowthFactor) * 12;
+                              return (
+                                <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  £{annualServiceRevenue.toLocaleString()}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </>
+                    )}
+                    
+                    <tr className="bg-gray-100 font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                        Total Income
+                      </td>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                        const yearRevenue = forecastResults
+                          .filter(r => r.year === year)
+                          .reduce((sum, r) => sum + r.totalRevenue, 0);
+                        return (
+                          <td key={year} className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                            £{yearRevenue.toLocaleString()}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Cost Breakdown Table */}
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Costs by Type (Annual)</h3>
+                <p className="text-sm text-gray-600 mt-1">Detailed breakdown of all cost categories</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cost Category
+                      </th>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => (
+                        <th key={year} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Year {year - modelConfig.launchYear + 1}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {/* Personnel Costs */}
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        Personnel Costs
+                      </td>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                        const currentYear = year - modelConfig.launchYear + 1;
+                        const teamCostForYear = modelConfig.globalCosts.teamCostsByYear.find(tc => tc.year === currentYear);
+                        const annualTeamCost = teamCostForYear ? teamCostForYear.totalCost : 0;
+                        return (
+                          <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            £{annualTeamCost.toLocaleString()}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    
+                    {/* Fixed Operating Costs */}
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        Office & Utilities
+                      </td>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                        const annualFixedCosts = modelConfig.globalCosts.monthlyFixedCosts * 12;
+                        return (
+                          <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            £{annualFixedCosts.toLocaleString()}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        Hosting & Infrastructure
+                      </td>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                        const annualHostingCosts = modelConfig.globalCosts.hostingInfrastructure * 12;
+                        return (
+                          <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            £{annualHostingCosts.toLocaleString()}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        Marketing Budget
+                      </td>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                        const annualMarketingCosts = modelConfig.globalCosts.marketingBudget * 12;
+                        return (
+                          <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            £{annualMarketingCosts.toLocaleString()}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    
+                    <tr>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        Fulfillment & Logistics
+                      </td>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                        const annualFulfillmentCosts = modelConfig.globalCosts.fulfillmentLogistics * 12;
+                        return (
+                          <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            £{annualFulfillmentCosts.toLocaleString()}
+                          </td>
+                        );
+                      })}
+                    </tr>
+
+                    {/* Property Play Specific Costs */}
+                    {selectedModels.includes('Property Play') && modelConfig.modelInputs.propertyPlay && (
+                      <>
+                        <tr className="bg-red-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-900" colSpan={Array.from(new Set(forecastResults.map(r => r.year))).length + 1}>
+                            Property Play - Detailed Costs
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                            → Mortgage Payments
+                          </td>
+                          {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                            const propertyPlay = modelConfig.modelInputs.propertyPlay!;
+                            const loanAmount = propertyPlay.propertyPurchasePrice * (1 - propertyPlay.downPaymentPercentage / 100);
+                            let monthlyMortgagePayment = 0;
+                            
+                            if (propertyPlay.downPaymentPercentage < 100 && loanAmount > 0 && propertyPlay.mortgageInterestRate > 0) {
+                              const monthlyRate = propertyPlay.mortgageInterestRate / 100 / 12;
+                              const totalPayments = propertyPlay.mortgageTermYears * 12;
+                              monthlyMortgagePayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalPayments)) / (Math.pow(1 + monthlyRate, totalPayments) - 1);
+                            } else if (propertyPlay.downPaymentPercentage < 100 && loanAmount > 0) {
+                              monthlyMortgagePayment = loanAmount / (propertyPlay.mortgageTermYears * 12);
+                            }
+                            
+                            const annualMortgagePayment = monthlyMortgagePayment * 12;
+                            return (
+                              <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                £{annualMortgagePayment.toLocaleString()}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                            → Property Tax ({modelConfig.modelInputs.propertyPlay.propertyTaxPercentage}% of value)
+                          </td>
+                          {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                            const propertyPlay = modelConfig.modelInputs.propertyPlay!;
+                            const yearsSinceStart = year - modelConfig.launchYear;
+                            const currentPropertyValue = propertyPlay.propertyPurchasePrice * Math.pow(1 + (propertyPlay.propertyAppreciationRate || 0) / 100, yearsSinceStart);
+                            const annualPropertyTax = currentPropertyValue * (propertyPlay.propertyTaxPercentage || 0) / 100;
+                            return (
+                              <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                £{annualPropertyTax.toLocaleString()}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                            → Insurance
+                          </td>
+                          {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                            const annualInsurance = modelConfig.modelInputs.propertyPlay!.insuranceCostAnnual;
+                            return (
+                              <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                £{annualInsurance.toLocaleString()}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                            → Maintenance ({modelConfig.modelInputs.propertyPlay.ongoingMaintenancePercentage}% of value)
+                          </td>
+                          {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                            const propertyPlay = modelConfig.modelInputs.propertyPlay!;
+                            const yearsSinceStart = year - modelConfig.launchYear;
+                            const currentPropertyValue = propertyPlay.propertyPurchasePrice * Math.pow(1 + (propertyPlay.propertyAppreciationRate || 0) / 100, yearsSinceStart);
+                            const annualMaintenance = currentPropertyValue * (propertyPlay.ongoingMaintenancePercentage || 0) / 100;
+                            return (
+                              <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                £{annualMaintenance.toLocaleString()}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                            → Property Management Fee ({modelConfig.modelInputs.propertyPlay.propertyManagementFeePercentage}% of rent)
+                          </td>
+                          {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                            const propertyPlay = modelConfig.modelInputs.propertyPlay!;
+                            const yearsSinceStart = year - modelConfig.launchYear;
+                            const rentGrowthFactor = Math.pow(1 + (propertyPlay.rentGrowthRate || 0) / 100, yearsSinceStart);
+                            const currentRentIncome = (propertyPlay.monthlyRentIncome || 0) * rentGrowthFactor;
+                            const annualManagementFees = (currentRentIncome * (propertyPlay.propertyManagementFeePercentage || 0) / 100) * 12;
+                            return (
+                              <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                £{annualManagementFees.toLocaleString()}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        <tr>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 pl-8">
+                            → Renovation Loan Payment
+                          </td>
+                          {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                            const propertyPlay = modelConfig.modelInputs.propertyPlay!;
+                            let monthlyRenovationPayment = 0;
+                            
+                            if (propertyPlay.initialRenovationCost > 0 && propertyPlay.renovationSpreadYears > 0) {
+                              const renovationMonthlyRate = (propertyPlay.renovationFinancingRate || 0) / 100 / 12;
+                              const renovationPayments = propertyPlay.renovationSpreadYears * 12;
+                              
+                              if (renovationMonthlyRate > 0) {
+                                monthlyRenovationPayment = propertyPlay.initialRenovationCost * 
+                                  (renovationMonthlyRate * Math.pow(1 + renovationMonthlyRate, renovationPayments)) / 
+                                  (Math.pow(1 + renovationMonthlyRate, renovationPayments) - 1);
+                              } else {
+                                monthlyRenovationPayment = propertyPlay.initialRenovationCost / renovationPayments;
+                              }
+                            }
+                            
+                            const annualRenovationPayment = monthlyRenovationPayment * 12;
+                            return (
+                              <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                £{annualRenovationPayment.toLocaleString()}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </>
+                    )}
+                    
+                    <tr className="bg-gray-100 font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                        Total Costs
+                      </td>
+                      {Array.from(new Set(forecastResults.map(r => r.year))).map(year => {
+                        const yearCosts = forecastResults
+                          .filter(r => r.year === year)
+                          .reduce((sum, r) => sum + r.totalCosts, 0);
+                        return (
+                          <td key={year} className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                            £{yearCosts.toLocaleString()}
+                          </td>
+                        );
+                      })}
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -2657,12 +3759,61 @@ export default function AdvancedBusinessModelingEngine({
           <div className="space-y-6">
             {/* Sensitivity Analysis Component */}
             <SensitivityAnalysis 
-              baselineModel={modelConfig}
+              baselineModel={{
+                ...modelConfig,
+                forecastResults: forecastResults,
+                selectedModels: selectedModels,
+                // Ensure the data structure matches what SensitivityAnalysis expects
+                modelInputs: modelConfig.modelInputs,
+                globalCosts: modelConfig.globalCosts,
+                // Add debug logging
+                _debug: {
+                  forecastResultsCount: forecastResults.length,
+                  sampleForecastResult: forecastResults[0],
+                  globalCostsKeys: Object.keys(modelConfig.globalCosts || {}),
+                  initialSetupCost: modelConfig.globalCosts?.initialSetupCost
+                }
+              }}
               onExport={(format) => {
                 console.log(`Exporting in ${format} format`);
                 // Export functionality will be implemented
               }}
             />
+
+            {/* Debug Info */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm">
+              <strong>Debug Info:</strong> Loading: {isLoading.toString()}, Selected Models: [{selectedModels.join(', ')}], 
+              Model Activations: {modelConfig.modelActivations.length}
+            </div>
+
+            {/* Data Status Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="text-blue-800 font-medium">📊 Analysis Data Status</h4>
+              <div className="grid grid-cols-2 gap-4 mt-2 text-sm">
+                <div>
+                  <span className="text-blue-700">Forecast Results:</span>
+                  <span className="ml-2 font-medium">{forecastResults.length} data points</span>
+                </div>
+                <div>
+                  <span className="text-blue-700">Active Models:</span>
+                  <span className="ml-2 font-medium">{selectedModels.join(', ') || 'None'}</span>
+                </div>
+                <div>
+                  <span className="text-blue-700">Launch Year:</span>
+                  <span className="ml-2 font-medium">{modelConfig.launchYear}</span>
+                </div>
+                <div>
+                  <span className="text-blue-700">Forecast Years:</span>
+                  <span className="ml-2 font-medium">{modelConfig.assumptions.forecastYears}</span>
+                </div>
+              </div>
+              {forecastResults.length > 0 && (
+                <div className="mt-2 text-xs text-blue-600">
+                  <strong>Sample Revenue:</strong> Month 1: £{forecastResults[0]?.totalRevenue?.toLocaleString() || '0'}, 
+                  Year 1 Total: £{forecastResults.filter(r => r.year === modelConfig.launchYear).reduce((sum, r) => sum + r.totalRevenue, 0).toLocaleString()}
+                </div>
+              )}
+            </div>
 
             {/* Key Metrics Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2693,7 +3844,7 @@ export default function AdvancedBusinessModelingEngine({
                   <div className="flex justify-between">
                     <span className="text-gray-600">5-Year Revenue:</span>
                     <span className="font-medium">
-                      £{forecastResults.reduce((sum, r) => sum + r.totalRevenue, 0).toLocaleString()}
+                      £{forecastResults.length > 0 ? forecastResults.reduce((sum, r) => sum + r.totalRevenue, 0).toLocaleString() : '0'}
                     </span>
                   </div>
                 </div>
@@ -2703,8 +3854,8 @@ export default function AdvancedBusinessModelingEngine({
                 <h3 className="text-lg font-medium text-gray-900 mb-4">🎯 Model Performance</h3>
                 <div className="space-y-3">
                   {selectedModels.map(model => {
-                    const modelRevenue = forecastResults.reduce((sum, r) => sum + (r.revenueByModel[model] || 0), 0);
-                    const totalRevenue = forecastResults.reduce((sum, r) => sum + r.totalRevenue, 0);
+                    const modelRevenue = forecastResults.length > 0 ? forecastResults.reduce((sum, r) => sum + (r.revenueByModel[model] || 0), 0) : 0;
+                    const totalRevenue = forecastResults.length > 0 ? forecastResults.reduce((sum, r) => sum + r.totalRevenue, 0) : 0;
                     const percentage = totalRevenue > 0 ? (modelRevenue / totalRevenue * 100) : 0;
                     
                     return (

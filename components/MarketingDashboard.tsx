@@ -75,8 +75,8 @@ export default function MarketingDashboard() {
         pageViews30Days: 45600,
         bounceRate: 42.5,
         avgSessionDuration: 185, // seconds
-        dailyVisitors: Array.from({ length: 30 }, () => Math.floor(200 + Math.random() * 300)),
-        monthlyVisitors: Array.from({ length: 12 }, () => Math.floor(200 + Math.random() * 300)),
+        dailyVisitors: Array.from({ length: 30 }, (_, i) => Math.floor(250 + (i % 7) * 50 + (Math.sin(i / 7) * 100))), // Realistic weekly pattern
+        monthlyVisitors: Array.from({ length: 12 }, (_, i) => Math.floor(300 + i * 25 + (i % 3) * 75)), // Growth trend with seasonal variation
         insights: {
           topPage: {
             path: '/environmental-monitoring',

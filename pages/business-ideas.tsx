@@ -5,7 +5,6 @@ import BusinessIdeaForm from '../components/BusinessIdeaForm';
 import BusinessIdeaList from '../components/BusinessIdeaList';
 import RevenueModelingEngine from '../components/RevenueModelingEngine';
 import AdvancedBusinessModelingEngine from '../components/AdvancedBusinessModelingEngine';
-import { supabase } from '../lib/supabase';
 
 export interface BusinessIdea {
   id: string;
@@ -32,16 +31,31 @@ export default function BusinessIdeas() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Get current user and load ideas from Supabase
+  // Get current user from localStorage (custom auth system)
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setUserId(user.id);
-          await loadBusinessIdeas(user.id);
+        console.log('🔍 Getting current user from localStorage...');
+        const userData = localStorage.getItem('moniteye-user');
+        
+        if (userData) {
+          const user = JSON.parse(userData);
+          console.log('👤 Current user from localStorage:', { 
+            hasUser: !!user, 
+            userId: user?.id,
+            userEmail: user?.email 
+          });
+          
+          if (user && user.id) {
+            console.log('✅ Setting userId to:', user.id);
+            setUserId(user.id);
+            await loadBusinessIdeas(user.id);
+          } else {
+            console.log('❌ Invalid user data in localStorage, using localStorage for ideas');
+            loadFromLocalStorage();
+          }
         } else {
-          // Fallback to localStorage for non-authenticated users
+          console.log('❌ No authenticated user found, using localStorage');
           loadFromLocalStorage();
         }
       } catch (error) {
@@ -107,7 +121,7 @@ export default function BusinessIdeas() {
       } else {
         const newIdea: BusinessIdea = {
           ...ideaData,
-          id: `idea-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `idea-${Date.now()}-${btoa(Date.now().toString()).substr(10, 9)}`,
           createdAt: now,
           updatedAt: now
         };
@@ -259,7 +273,23 @@ export default function BusinessIdeas() {
   };
 
   const handleUpdateAdvancedModel = async (ideaId: string, advancedModel: any) => {
+    console.log('🎯 PARENT: handleUpdateAdvancedModel called with:', {
+      ideaId,
+      userId,
+      userIdType: typeof userId,
+      userIdLength: userId?.length,
+      hasAdvancedModel: !!advancedModel,
+      advancedModelKeys: advancedModel ? Object.keys(advancedModel) : []
+    });
+
     if (!userId) {
+      console.log('⚠️ No userId found, saving to localStorage only');
+      console.log('🔍 DEBUG: userId state details:', {
+        userId,
+        userIdType: typeof userId,
+        userIdStringified: JSON.stringify(userId),
+        loading
+      });
       // Fallback to localStorage for non-authenticated users
       setIdeas(prev => prev.map(idea => 
         idea.id === ideaId 
@@ -270,27 +300,70 @@ export default function BusinessIdeas() {
     }
 
     try {
+      console.log('🚀 Saving advanced model for idea:', ideaId, 'with data:', {
+        name: advancedModel.name,
+        hasModelInputs: !!advancedModel.modelInputs,
+        hasGlobalCosts: !!advancedModel.globalCosts,
+        forecastResultsLength: advancedModel.forecastResults?.length || 0,
+        userId: userId
+      });
+
+      // Find the business idea to include its data in case it needs to be created in the database
+      const businessIdea = ideas.find(idea => idea.id === ideaId);
+      const requestPayload = {
+        ...advancedModel,
+        // Include business idea data for offline ideas that need to be created in database
+        businessIdeaData: businessIdea ? {
+          name: businessIdea.name,
+          description: businessIdea.description,
+          industry: businessIdea.industry,
+          businessModel: businessIdea.businessModel,
+          targetMarket: businessIdea.targetMarket,
+          initialStartupCost: businessIdea.initialStartupCost,
+          ongoingMonthlyCost: businessIdea.ongoingMonthlyCost,
+          ongoingAnnualCost: businessIdea.ongoingAnnualCost,
+          tags: businessIdea.tags
+        } : undefined
+      };
+
       const response = await fetch(`/api/business-ideas/${ideaId}/advanced-model?userId=${userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(advancedModel),
+        body: JSON.stringify(requestPayload),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setIdeas(prev => prev.map(idea => 
-            idea.id === ideaId 
-              ? { ...idea, advancedModel, updatedAt: new Date().toISOString() }
-              : idea
-          ));
-        }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API Error: ${response.status} - ${errorData.error || 'Unknown error'}`);
       }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Save operation was not successful');
+      }
+
+      console.log('✅ Advanced model saved successfully:', result);
+      
+      // Update the business idea with the advanced model
+      // If a new business idea was created in the database, we might need to update the ID
+      setIdeas(prev => prev.map(idea => 
+        idea.id === ideaId 
+          ? { 
+              ...idea, 
+              advancedModel, 
+              updatedAt: new Date().toISOString(),
+              // If the API returned a new business idea ID, update it
+              ...(result.newBusinessIdeaId ? { id: result.newBusinessIdeaId } : {})
+            }
+          : idea
+      ));
     } catch (error) {
       console.error('Error saving advanced model:', error);
-      alert('Failed to save advanced model. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to save advanced model: ${errorMessage}`);
+      throw error; // Re-throw to allow the calling function to handle it
     }
   };
 
@@ -396,6 +469,7 @@ export default function BusinessIdeas() {
             {activeTab === 'advanced' && selectedIdea && (
               <AdvancedBusinessModelingEngine
                 idea={selectedIdea}
+                userId={userId}
                 onUpdateModel={(advancedModel) => handleUpdateAdvancedModel(selectedIdea.id, advancedModel)}
                 onBack={() => setActiveTab('list')}
               />

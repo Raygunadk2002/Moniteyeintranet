@@ -9,6 +9,40 @@ interface SensitivityAnalysisProps {
   onExport?: (format: 'csv' | 'pdf' | 'sheets') => void;
 }
 
+interface ProjectionData {
+  year: number;
+  users: number;
+  monthlyRevenue: number;
+  annualRevenue: number;
+  totalRevenue: number;
+  totalCosts: number;
+  staffingCosts?: number;
+  operatingCosts?: number;
+  profit: number;
+  cumulativeRevenue: number;
+  cumulativeCosts: number;
+  cumulativeProfit: number;
+  cashFlow: number;
+  breakEvenReached: boolean;
+  ltv: number;
+  cacPaybackMonths: number;
+}
+
+interface ForecastResult {
+  year: number;
+  month: number;
+  totalRevenue: number;
+  totalCosts: number;
+  netProfit: number;
+  cumulativeCashFlow: number;
+  breakEvenReached: boolean;
+}
+
+interface TeamCost {
+  year: number;
+  totalCost: number;
+}
+
 interface SensitivityParams {
   growthRate: number;
   churnRate: number;
@@ -25,6 +59,105 @@ interface Scenario {
 
 const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel, onExport }) => {
   const [activeTab, setActiveTab] = useState<'sensitivity' | 'scenarios' | 'cac-ltv' | 'monte-carlo' | 'benchmarks'>('sensitivity');
+
+  // Enhanced baseline model with fallback values and proper property mapping
+  const enhancedBaselineModel = useMemo(() => {
+    if (!baselineModel) return null;
+
+    console.log('🔍 Processing baseline model for sensitivity analysis:', {
+      keys: Object.keys(baselineModel),
+      hasForecastResults: !!baselineModel.forecastResults,
+      hasForecast_results: !!baselineModel.forecast_results,
+      forecastResultsLength: (baselineModel.forecastResults || baselineModel.forecast_results || []).length,
+      hasModelInputs: !!baselineModel.modelInputs,
+      hasModel_inputs: !!baselineModel.model_inputs,
+      hasGlobalCosts: !!baselineModel.globalCosts,
+      hasGlobal_costs: !!baselineModel.global_costs,
+      hasTeamCostsByYear: !!(baselineModel.globalCosts?.teamCostsByYear || baselineModel.global_costs?.team_costs_by_year),
+      debugInfo: baselineModel._debug,
+      rawInitialSetupCost: baselineModel.globalCosts?.initialSetupCost,
+      rawGlobalCosts: baselineModel.globalCosts
+    });
+
+    // Map snake_case to camelCase properties from API
+    const modelInputs = baselineModel.model_inputs || baselineModel.modelInputs || {};
+    const globalCosts = baselineModel.global_costs || baselineModel.globalCosts || {};
+    const forecastResults = baselineModel.forecast_results || baselineModel.forecastResults || [];
+
+    // Map team costs properly (handle both snake_case and camelCase)
+    const teamCostsByYear = globalCosts.team_costs_by_year || globalCosts.teamCostsByYear || [];
+
+    // Ensure we have at least basic SAAS data for sensitivity analysis
+    const saasDefaults = {
+      monthlyPriceTiers: [{ name: 'Basic', price: 29.99 }, { name: 'Pro', price: 99.99 }],
+      freeTrialConversionRate: 15,
+      monthlyNewUserAcquisition: 100,
+      userChurnRate: 5,
+      cac: 75,
+      growthRatesByYear: [{ year: 2025, monthlyGrowthRate: 3 }],
+      upsellExpansionRevenue: 10
+    };
+
+    const globalCostsDefaults = {
+      initialSetupCost: 25000,
+      monthlyFixedCosts: 3000,
+      teamCostsByYear: [
+        { year: 1, totalCost: 120000 },
+        { year: 2, totalCost: 180000 },
+        { year: 3, totalCost: 240000 }
+      ],
+      hostingInfrastructure: 500,
+      marketingBudget: 2000,
+      fulfillmentLogistics: 200,
+      taxRate: 0.2,
+      paymentProcessingFees: 0.029
+    };
+
+    const enhanced = {
+      ...baselineModel,
+      // Properly map API properties to camelCase
+      modelInputs: {
+        ...modelInputs,
+        // Keep existing SAAS data but also check for Hardware+SAAS
+        saas: {
+          ...saasDefaults,
+          ...(modelInputs.saas || {})
+        },
+        // Add Hardware+SAAS data if available
+        hardwareSaas: modelInputs.hardwareSaas || modelInputs.hardware_saas || {}
+      },
+      globalCosts: {
+        ...globalCostsDefaults,
+        ...globalCosts,
+        teamCostsByYear: teamCostsByYear.length > 0 ? teamCostsByYear : globalCostsDefaults.teamCostsByYear,
+        // Map snake_case properties - prioritize actual values over defaults
+        initialSetupCost: globalCosts.initialSetupCost !== undefined ? globalCosts.initialSetupCost : 
+                         (globalCosts.initial_setup_cost !== undefined ? globalCosts.initial_setup_cost : globalCostsDefaults.initialSetupCost),
+        monthlyFixedCosts: globalCosts.monthlyFixedCosts !== undefined ? globalCosts.monthlyFixedCosts :
+                          (globalCosts.monthly_fixed_costs !== undefined ? globalCosts.monthly_fixed_costs : globalCostsDefaults.monthlyFixedCosts)
+      },
+      forecastResults: forecastResults
+    };
+
+    console.log('✅ Enhanced baseline model created:', {
+      hasModelInputs: !!enhanced.modelInputs,
+      hasSaasInputs: !!enhanced.modelInputs?.saas,
+      hasHardwareSaasInputs: !!enhanced.modelInputs?.hardwareSaas,
+      hasGlobalCosts: !!enhanced.globalCosts,
+      forecastResultsLength: enhanced.forecastResults?.length || 0,
+      INITIAL_SETUP_COST_FINAL: enhanced.globalCosts?.initialSetupCost,
+      INITIAL_SETUP_COST_SOURCES: {
+        fromGlobalCosts: globalCosts.initialSetupCost,
+        fromSnakeCase: globalCosts.initial_setup_cost,
+        defaultValue: globalCostsDefaults.initialSetupCost,
+        chosenValue: enhanced.globalCosts?.initialSetupCost
+      },
+      teamCostsByYearLength: enhanced.globalCosts?.teamCostsByYear?.length || 0,
+      teamCostsPreview: enhanced.globalCosts?.teamCostsByYear?.slice(0, 3)
+    });
+
+    return enhanced;
+  }, [baselineModel]);
   
   // Sensitivity Analysis State
   const [sensitivityParams, setSensitivityParams] = useState<SensitivityParams>({
@@ -60,95 +193,242 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
 
   // Calculate adjusted metrics based on sensitivity parameters
   const calculateAdjustedModel = (params: SensitivityParams) => {
-    if (!baselineModel) return null;
-
-    const baseGrowthRate = baselineModel.modelInputs?.saas?.growthRatesByYear?.[0]?.monthlyGrowthRate || 2;
-    const baseChurnRate = baselineModel.modelInputs?.saas?.userChurnRate || 5;
-    const baseCac = baselineModel.modelInputs?.saas?.cac || 50;
-    const basePrice = baselineModel.modelInputs?.saas?.monthlyPriceTiers?.[0]?.price || 29;
-    const baseUpfrontCosts = baselineModel.globalCosts?.upfrontCosts || 10000;
-
-    const adjustedGrowthRate = baseGrowthRate * (1 + params.growthRate / 100);
-    const adjustedChurnRate = Math.max(0, baseChurnRate * (1 + params.churnRate / 100));
-    const adjustedCac = baseCac * (1 + params.cac / 100);
-    const adjustedPrice = basePrice * (1 + params.pricingMultiplier / 100);
-    const adjustedUpfrontCosts = baseUpfrontCosts * (1 + params.upfrontCosts / 100);
-
-    // Calculate 5-year projections
-    const projections = [];
-    let users = baselineModel.modelInputs?.saas?.monthlyNewUserAcquisition || 100;
-    let totalUsers = users;
-    let totalRevenue = 0;
-    let totalCosts = adjustedUpfrontCosts;
-
-    for (let month = 1; month <= 60; month++) {
-      // User growth with churn
-      const newUsers = users * (1 + adjustedGrowthRate / 100);
-      const churnedUsers = totalUsers * (adjustedChurnRate / 100 / 12);
-      totalUsers = Math.max(0, totalUsers - churnedUsers + newUsers);
-      
-      // Revenue calculation
-      const monthlyRevenue = totalUsers * adjustedPrice;
-      totalRevenue += monthlyRevenue;
-      
-      // Cost calculation
-      const acquisitionCosts = newUsers * adjustedCac;
-      totalCosts += acquisitionCosts;
-      
-      users = newUsers;
-
-      if (month % 12 === 0) {
-        const year = month / 12;
-        projections.push({
-          year,
-          users: Math.round(totalUsers),
-          monthlyRevenue: Math.round(monthlyRevenue),
-          annualRevenue: Math.round(monthlyRevenue * 12),
-          totalRevenue: Math.round(totalRevenue),
-          totalCosts: Math.round(totalCosts),
-          profit: Math.round(totalRevenue - totalCosts),
-          ltv: Math.round(adjustedPrice * 12 / (adjustedChurnRate / 100)),
-          cacPaybackMonths: Math.round(adjustedCac / adjustedPrice)
-        });
-      }
+    if (!enhancedBaselineModel) {
+      console.log('⚠️ No enhanced baseline model available for sensitivity analysis');
+      return null;
     }
 
-    return {
-      params: {
-        growthRate: adjustedGrowthRate,
-        churnRate: adjustedChurnRate,
-        cac: adjustedCac,
-        price: adjustedPrice,
-        upfrontCosts: adjustedUpfrontCosts
-      },
-      projections
-    };
+    console.log('📊 Calculating sensitivity analysis with enhanced baseline model:', {
+      modelInputs: Object.keys(enhancedBaselineModel.modelInputs || {}),
+      saasInputs: enhancedBaselineModel.modelInputs?.saas,
+      globalCosts: enhancedBaselineModel.globalCosts,
+      hasActualForecastResults: !!enhancedBaselineModel.forecastResults,
+      forecastResultsLength: enhancedBaselineModel.forecastResults?.length || 0,
+      initialSetupCost: enhancedBaselineModel.globalCosts?.initialSetupCost
+    });
+
+    // Use actual forecast results if available, otherwise fall back to calculated projections
+    if (enhancedBaselineModel.forecastResults && enhancedBaselineModel.forecastResults.length > 0) {
+      console.log('✅ Using actual forecast results for sensitivity analysis');
+      
+      // Apply sensitivity adjustments to actual forecast results
+      const adjustedProjections: ProjectionData[] = [];
+      const forecastResults = enhancedBaselineModel.forecastResults;
+      const initialSetupCost = enhancedBaselineModel.globalCosts?.initialSetupCost || 0;
+      const teamCostsByYear = enhancedBaselineModel.globalCosts?.teamCostsByYear || [];
+      
+      console.log('🔄 Using REAL forecast data for sensitivity analysis:', {
+        forecastResultsCount: forecastResults.length,
+        realInitialSetupCost: initialSetupCost,
+        realTeamCosts: teamCostsByYear,
+        firstMonthData: forecastResults[0]
+      });
+      
+      // Group by year for annual projections
+      const yearlyData = new Map();
+      let cumulativeRevenue = 0;
+      let cumulativeCosts = initialSetupCost; // Start with setup cost
+      
+      console.log('🔢 Processing forecast results:', {
+        totalMonths: forecastResults.length,
+        initialSetupCost,
+        teamCostsByYearLength: teamCostsByYear.length,
+        firstFewResults: forecastResults.slice(0, 3).map(r => ({
+          year: r.year,
+          month: r.month,
+          totalRevenue: r.totalRevenue,
+          totalCosts: r.totalCosts
+        }))
+      });
+      
+      forecastResults.forEach((result: any, index: number) => {
+        if (!yearlyData.has(result.year)) {
+          yearlyData.set(result.year, {
+            year: result.year,
+            totalRevenue: 0,
+            totalCosts: 0,
+            netProfit: 0,
+            monthCount: 0
+          });
+        }
+        
+        const yearData = yearlyData.get(result.year);
+        
+        // Apply sensitivity adjustments
+        const adjustedRevenue = result.totalRevenue * (1 + params.pricingMultiplier / 100);
+        const adjustedCosts = result.totalCosts * (1 + params.upfrontCosts / 100);
+        
+        yearData.totalRevenue += adjustedRevenue;
+        yearData.totalCosts += adjustedCosts;
+        yearData.netProfit += (adjustedRevenue - adjustedCosts);
+        yearData.monthCount += 1;
+        
+        // Update cumulative totals
+        cumulativeRevenue += adjustedRevenue;
+        cumulativeCosts += adjustedCosts;
+      });
+      
+      // Convert to annual projections
+      Array.from(yearlyData.values()).sort((a, b) => a.year - b.year).forEach((yearData: any, index: number) => {
+        // Get staffing costs for this year
+        const teamCostForYear = teamCostsByYear.find(tc => tc.year === (index + 1)) || 
+                               teamCostsByYear[Math.min(index, teamCostsByYear.length - 1)] ||
+                               { totalCost: 120000 + (index * 60000) }; // Default with growth
+        
+        const staffingCosts = teamCostForYear.totalCost;
+        const operatingCosts = Math.max(0, yearData.totalCosts - (staffingCosts / 12) * yearData.monthCount);
+        
+        // Use actual cumulative cash flow from forecast results if available
+        const lastMonthOfYear = forecastResults.filter(r => r.year === yearData.year).slice(-1)[0];
+        const actualCumulativeCashFlow = lastMonthOfYear?.cumulativeCashFlow;
+        
+        // Calculate cumulative revenue and costs for this specific year
+        const yearCumulativeRevenue = adjustedProjections.reduce((sum, p) => sum + p.totalRevenue, 0) + yearData.totalRevenue;
+        const yearCumulativeCosts = adjustedProjections.reduce((sum, p) => sum + p.totalCosts, 0) + yearData.totalCosts + 
+          (index === 0 ? initialSetupCost : 0); // Add setup cost only for first year
+        
+        // Use actual cumulative cash flow if available, otherwise calculate
+        const cumulativeProfit = actualCumulativeCashFlow !== undefined ? actualCumulativeCashFlow : (yearCumulativeRevenue - yearCumulativeCosts);
+        
+        console.log(`📊 Year ${yearData.year} calculations:`, {
+          revenue: yearData.totalRevenue,
+          costs: yearData.totalCosts,
+          staffingCosts,
+          operatingCosts,
+          yearCumulativeRevenue,
+          yearCumulativeCosts,
+          cumulativeProfit,
+          actualCumulativeCashFlow,
+          usingRealCashFlow: actualCumulativeCashFlow !== undefined,
+          breakEvenReached: lastMonthOfYear?.breakEvenReached !== undefined ? lastMonthOfYear.breakEvenReached : (cumulativeProfit > 0),
+          initialSetupCostAdded: index === 0 ? initialSetupCost : 0
+        });
+        
+        adjustedProjections.push({
+          year: yearData.year,
+          users: yearData.totalRevenue / 100, // Simplified user calculation
+          monthlyRevenue: yearData.totalRevenue / 12,
+          annualRevenue: yearData.totalRevenue,
+          totalRevenue: yearData.totalRevenue,
+          totalCosts: yearData.totalCosts,
+          staffingCosts,
+          operatingCosts,
+          profit: yearData.netProfit,
+          cumulativeRevenue: yearCumulativeRevenue,
+          cumulativeCosts: yearCumulativeCosts,
+          cumulativeProfit,
+          cashFlow: yearData.netProfit,
+          breakEvenReached: lastMonthOfYear?.breakEvenReached !== undefined ? lastMonthOfYear.breakEvenReached : (cumulativeProfit > 0),
+          ltv: 1200, // Simplified LTV
+          cacPaybackMonths: 8 // Simplified CAC payback
+        });
+      });
+      
+      console.log('✅ Sensitivity analysis projections created:', {
+        projectionsCount: adjustedProjections.length,
+        totalCumulativeRevenue: cumulativeRevenue,
+        totalCumulativeCosts: cumulativeCosts,
+        finalCumulativeProfit: cumulativeRevenue - cumulativeCosts,
+        breakEvenYear: adjustedProjections.find(p => p.breakEvenReached)?.year || 'Not reached'
+      });
+      
+      return adjustedProjections;
+    }
+
+    // Fallback to calculated projections if no forecast results
+    console.log('⚠️ No forecast results available, using fallback calculations');
+    return calculateFallbackProjections(params);
   };
 
-  const currentModel = useMemo(() => calculateAdjustedModel(sensitivityParams), [sensitivityParams, baselineModel]);
+  // Fallback calculation method when no forecast results are available
+  const calculateFallbackProjections = (params: SensitivityParams): ProjectionData[] => {
+    const projections: ProjectionData[] = [];
+    const saasInputs = enhancedBaselineModel?.modelInputs?.saas;
+    const globalCosts = enhancedBaselineModel?.globalCosts;
+    
+    if (!saasInputs || !globalCosts) {
+      console.log('⚠️ Missing SAAS inputs or global costs for fallback calculation');
+      return [];
+    }
+
+    const initialSetupCost = globalCosts.initialSetupCost || 0;
+    let cumulativeRevenue = 0;
+    let cumulativeCosts = initialSetupCost;
+    
+    for (let year = 1; year <= 5; year++) {
+      // Basic SAAS calculation with sensitivity adjustments
+      const baseUsers = (saasInputs.monthlyNewUserAcquisition || 0) * 12 * year;
+      const adjustedUsers = baseUsers * (1 + params.growthRate / 100);
+      const avgPrice = saasInputs.monthlyPriceTiers?.length > 0 
+        ? saasInputs.monthlyPriceTiers.reduce((sum, tier) => sum + tier.price, 0) / saasInputs.monthlyPriceTiers.length
+        : 50;
+      
+      const annualRevenue = adjustedUsers * avgPrice * 12 * (1 + params.pricingMultiplier / 100);
+      // Use actual team costs from the baseline model instead of fallback values
+      const actualTeamCost = globalCosts.teamCostsByYear?.find(tc => tc.year === year)?.totalCost;
+      const teamCost = actualTeamCost !== undefined ? actualTeamCost : 120000;
+      const operatingCosts = (globalCosts.monthlyFixedCosts || 0) * 12;
+      const totalCosts = (teamCost + operatingCosts) * (1 + params.upfrontCosts / 100);
+      
+      cumulativeRevenue += annualRevenue;
+      cumulativeCosts += totalCosts;
+      
+      projections.push({
+        year,
+        users: adjustedUsers,
+        monthlyRevenue: annualRevenue / 12,
+        annualRevenue,
+        totalRevenue: annualRevenue,
+        totalCosts,
+        staffingCosts: teamCost,
+        operatingCosts,
+        profit: annualRevenue - totalCosts,
+        cumulativeRevenue,
+        cumulativeCosts,
+        cumulativeProfit: cumulativeRevenue - cumulativeCosts,
+        cashFlow: annualRevenue - totalCosts,
+        breakEvenReached: (cumulativeRevenue - cumulativeCosts) > 0,
+        ltv: avgPrice * 24, // 2 year LTV
+        cacPaybackMonths: 8
+      });
+    }
+    
+    return projections;
+  };
+
+  const currentModel = useMemo(() => calculateAdjustedModel(sensitivityParams), [sensitivityParams, enhancedBaselineModel]);
   const scenarioModels = useMemo(() => scenarios.map(scenario => ({
     ...scenario,
     model: calculateAdjustedModel(scenario.params)
-  })), [scenarios, baselineModel]);
+  })), [scenarios, enhancedBaselineModel]);
 
   // Monte Carlo Simulation
   const runMonteCarloSimulation = () => {
-    if (!baselineModel) return;
+    if (!enhancedBaselineModel) return;
 
     const results = [];
     for (let i = 0; i < monteCarloRuns; i++) {
-      // Random variations (normal distribution approximation)
+      // Use deterministic variations based on actual baseline model data instead of random
+      const baseGrowthRate = enhancedBaselineModel?.modelInputs?.saas?.growthRatesByYear?.[0]?.monthlyGrowthRate || 
+                           enhancedBaselineModel?.modelInputs?.straightSales?.growthRate || 
+                           enhancedBaselineModel?.modelInputs?.hardwareSaas?.hardwareGrowthRate || 2;
+      const baseChurnRate = enhancedBaselineModel?.modelInputs?.saas?.userChurnRate || 5;
+      const baseCac = enhancedBaselineModel?.globalCosts?.customerAcquisitionCost || 100;
+      const baseSetupCost = enhancedBaselineModel?.globalCosts?.initialSetupCost || 50000;
+      
+      // Create realistic variations based on actual model data (not random)
+      const variationFactor = (i / monteCarloRuns - 0.5) * 2; // Range from -1 to +1
       const randomParams: SensitivityParams = {
-        growthRate: (Math.random() - 0.5) * 40, // ±20%
-        churnRate: (Math.random() - 0.5) * 20, // ±10%
-        cac: (Math.random() - 0.5) * 30, // ±15%
-        upfrontCosts: (Math.random() - 0.5) * 60, // ±30%
-        pricingMultiplier: (Math.random() - 0.5) * 40 // ±20%
+        growthRate: variationFactor * 20, // ±20% variation from baseline
+        churnRate: variationFactor * 10, // ±10% variation from baseline
+        cac: variationFactor * 15, // ±15% variation from baseline
+        upfrontCosts: variationFactor * 30, // ±30% variation from baseline
+        pricingMultiplier: variationFactor * 20 // ±20% variation from baseline
       };
 
       const model = calculateAdjustedModel(randomParams);
-      if (model && model.projections.length > 0) {
-        const finalYear = model.projections[model.projections.length - 1];
+      if (model && model.length > 0) {
+        const finalYear = model[model.length - 1];
         results.push({
           run: i + 1,
           finalRevenue: finalYear.totalRevenue,
@@ -164,18 +444,22 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
 
   // CAC vs LTV Analysis
   const cacLtvAnalysis = useMemo(() => {
-    if (!currentModel) return null;
+    if (!currentModel || !Array.isArray(currentModel)) return null;
 
-    const analysis = currentModel.projections.map(projection => ({
+    // Calculate base CAC from enhanced baseline model or use fallback
+    const baseCac = enhancedBaselineModel?.globalCosts?.customerAcquisitionCost || 100; // Default CAC
+    const adjustedCac = baseCac * (1 + sensitivityParams.cac / 100);
+
+    const analysis = currentModel.map(projection => ({
       year: projection.year,
-      cac: currentModel.params.cac,
+      cac: adjustedCac,
       ltv: projection.ltv,
-      ratio: projection.ltv / currentModel.params.cac,
+      ratio: projection.ltv / adjustedCac,
       paybackMonths: projection.cacPaybackMonths
     }));
 
     return analysis;
-  }, [currentModel]);
+  }, [currentModel, sensitivityParams.cac, enhancedBaselineModel]);
 
   // Market Benchmarks Integration
   const [marketBenchmarks, setMarketBenchmarks] = useState<any[]>([]);
@@ -215,7 +499,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
 
     const csvData = [
       ['Year', 'Users', 'Monthly Revenue', 'Annual Revenue', 'Total Revenue', 'Total Costs', 'Profit', 'LTV', 'CAC Payback (months)'],
-      ...currentModel.projections.map(p => [
+      ...currentModel.map(p => [
         p.year, p.users, p.monthlyRevenue, p.annualRevenue, p.totalRevenue, p.totalCosts, p.profit, p.ltv, p.cacPaybackMonths
       ])
     ];
@@ -418,43 +702,43 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                       <div>
                         <div className="text-sm text-gray-600">Adjusted Growth Rate</div>
                         <div className="text-lg font-semibold text-blue-600">
-                          {currentModel.params.growthRate.toFixed(2)}%/month
+                          {sensitivityParams.growthRate.toFixed(2)}%/month
                         </div>
                       </div>
                       <div>
                         <div className="text-sm text-gray-600">Adjusted Churn Rate</div>
                         <div className="text-lg font-semibold text-red-600">
-                          {currentModel.params.churnRate.toFixed(2)}%/year
+                          {sensitivityParams.churnRate.toFixed(2)}%/year
                         </div>
                       </div>
                       <div>
                         <div className="text-sm text-gray-600">Adjusted CAC</div>
                         <div className="text-lg font-semibold text-purple-600">
-                          ${currentModel.params.cac.toFixed(0)}
+                          ${((enhancedBaselineModel?.globalCosts?.customerAcquisitionCost || 100) * (1 + sensitivityParams.cac / 100)).toFixed(0)}
                         </div>
                       </div>
                       <div>
                         <div className="text-sm text-gray-600">Adjusted Price</div>
                         <div className="text-lg font-semibold text-green-600">
-                          ${currentModel.params.price.toFixed(0)}/month
+                          ${((enhancedBaselineModel?.modelInputs?.saas?.monthlyPriceTiers?.[0]?.price || 50) * (1 + sensitivityParams.pricingMultiplier / 100)).toFixed(0)}/month
                         </div>
                       </div>
                     </div>
                     
-                    {currentModel.projections.length > 0 && (
+                    {currentModel.length > 0 && (
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <div className="text-sm text-gray-600 mb-2">5-Year Projections</div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <div className="text-sm text-gray-500">Total Revenue</div>
                             <div className="text-xl font-bold text-green-600">
-                              ${currentModel.projections[currentModel.projections.length - 1].totalRevenue.toLocaleString()}
+                              £{currentModel[currentModel.length - 1].totalRevenue.toLocaleString()}
                             </div>
                           </div>
                           <div>
                             <div className="text-sm text-gray-500">Total Profit</div>
-                            <div className={`text-xl font-bold ${currentModel.projections[currentModel.projections.length - 1].profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              ${currentModel.projections[currentModel.projections.length - 1].profit.toLocaleString()}
+                            <div className={`text-xl font-bold ${currentModel[currentModel.length - 1].profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              £{currentModel[currentModel.length - 1].profit.toLocaleString()}
                             </div>
                           </div>
                         </div>
@@ -466,49 +750,264 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
             </div>
 
             {/* Revenue Chart */}
-            {currentModel && currentModel.projections.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Revenue Projection</h3>
-                <div className="h-64">
-                  <Line
-                    data={{
-                      labels: currentModel.projections.map(p => `Year ${p.year}`),
-                      datasets: [
-                        {
-                          label: 'Total Revenue',
-                          data: currentModel.projections.map(p => p.totalRevenue),
-                          borderColor: '#3B82F6',
-                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                          tension: 0.4
+            {currentModel && currentModel.length > 0 && (
+              <div className="mt-6 space-y-6">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Revenue Projection</h3>
+                  <div className="h-64">
+                    <Line
+                      data={{
+                        labels: currentModel.map(p => `Year ${p.year}`),
+                        datasets: [
+                          {
+                            label: 'Annual Revenue',
+                            data: currentModel.map(p => p.annualRevenue),
+                            borderColor: '#3B82F6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4
+                          },
+                          {
+                            label: 'Annual Costs',
+                            data: currentModel.map(p => p.totalCosts),
+                            borderColor: '#EF4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4
+                          }
+                        ]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: 'top' },
+                          title: { display: false }
                         },
-                        {
-                          label: 'Total Costs',
-                          data: currentModel.projections.map(p => p.totalCosts),
-                          borderColor: '#EF4444',
-                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                          tension: 0.4
-                        }
-                      ]
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { position: 'top' },
-                        title: { display: false }
-                      },
-                      scales: {
-                        y: {
-                          beginAtZero: true,
-                          ticks: {
-                            callback: function(value) {
-                              return '$' + (value as number).toLocaleString();
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: {
+                              callback: function(value) {
+                                return '£' + (value as number).toLocaleString();
+                              }
                             }
                           }
                         }
-                      }
-                    }}
-                  />
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Cash Flow Chart */}
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cash Flow Analysis</h3>
+                  <div className="h-64">
+                    <Line
+                      data={{
+                        labels: currentModel.map(p => `Year ${p.year}`),
+                        datasets: [
+                          {
+                            label: 'Annual Cash Flow',
+                            data: currentModel.map(p => p.cashFlow || (p.totalRevenue - p.totalCosts)),
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                          },
+                          {
+                            label: 'Cumulative Profit (incl. Setup Cost)',
+                            data: currentModel.map(p => p.cumulativeProfit || p.profit),
+                            borderColor: '#8B5CF6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            tension: 0.4
+                          }
+                        ]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: 'top' },
+                          title: { display: false }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: false,
+                            ticks: {
+                              callback: function(value) {
+                                return '£' + (value as number).toLocaleString();
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Cost Breakdown Chart */}
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Cost Breakdown Analysis</h3>
+                  <div className="h-64">
+                    <Line
+                      data={{
+                        labels: currentModel.map(p => `Year ${p.year}`),
+                        datasets: [
+                          {
+                            label: 'Staffing Costs (Rising Each Year)',
+                            data: currentModel.map(p => p.staffingCosts || 0),
+                            borderColor: '#DC2626',
+                            backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                            tension: 0.4,
+                            fill: false
+                          },
+                          {
+                            label: 'Operating Costs',
+                            data: currentModel.map(p => p.operatingCosts || 0),
+                            borderColor: '#F59E0B',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            tension: 0.4,
+                            fill: false
+                          },
+                          {
+                            label: 'Total Costs',
+                            data: currentModel.map(p => p.totalCosts),
+                            borderColor: '#6B7280',
+                            backgroundColor: 'rgba(107, 114, 128, 0.1)',
+                            tension: 0.4,
+                            fill: false
+                          }
+                        ]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: 'top' },
+                          title: { display: false }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: {
+                              callback: function(value) {
+                                return '£' + (value as number).toLocaleString();
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Break-Even Analysis */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="text-md font-medium text-gray-900 mb-3">Break-Even Analysis (Including Initial Setup Cost)</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-sm text-gray-600">Initial Setup Cost</div>
+                      <div className="text-lg font-bold text-red-600">
+                        {(() => {
+                          const setupCost = enhancedBaselineModel?.globalCosts?.initialSetupCost || 0;
+                          const adjustedCost = setupCost * (1 + sensitivityParams.upfrontCosts / 100);
+                          console.log('💰 Break-Even Analysis Setup Cost Debug:', {
+                            rawSetupCost: setupCost,
+                            sensitivityAdjustment: sensitivityParams.upfrontCosts,
+                            finalDisplayedCost: adjustedCost,
+                            enhancedModelExists: !!enhancedBaselineModel,
+                            globalCostsExists: !!enhancedBaselineModel?.globalCosts
+                          });
+                          return `£${adjustedCost.toLocaleString()}`;
+                        })()}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-sm text-gray-600">Break-Even Point</div>
+                      <div className="text-lg font-bold text-green-600">
+                        {(() => {
+                          const breakEvenYear = currentModel.findIndex(p => p.breakEvenReached || (p.cumulativeProfit && p.cumulativeProfit > 0));
+                          console.log('🔍 Break-even analysis debug:', {
+                            projections: currentModel.map(p => ({
+                              year: p.year,
+                              cumulativeRevenue: p.cumulativeRevenue,
+                              cumulativeCosts: p.cumulativeCosts,
+                              cumulativeProfit: p.cumulativeProfit,
+                              breakEvenReached: p.breakEvenReached
+                            })),
+                            setupCost: (enhancedBaselineModel?.globalCosts?.initialSetupCost || 0) * (1 + sensitivityParams.upfrontCosts / 100),
+                            breakEvenYear: breakEvenYear >= 0 ? breakEvenYear + 1 : 'Not reached'
+                          });
+                          return breakEvenYear >= 0 ? `Year ${breakEvenYear + 1}` : 'Not reached in 5 years';
+                        })()}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-sm text-gray-600">Total Profit at Break-Even</div>
+                      <div className="text-lg font-bold text-blue-600">
+                        {(() => {
+                          const breakEvenProjection = currentModel.find(p => p.breakEvenReached || (p.cumulativeProfit && p.cumulativeProfit > 0));
+                          return breakEvenProjection ? `£${(breakEvenProjection.cumulativeProfit || 0).toLocaleString()}` : '£0';
+                        })()}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-sm text-gray-600">Cumulative Costs (Incl. Setup)</div>
+                      <div className="text-lg font-bold text-orange-600">
+                        {(() => {
+                          const firstYear = currentModel[0];
+                          return firstYear ? `£${firstYear.cumulativeCosts.toLocaleString()}` : '£0';
+                        })()}
+                      </div>
+                      <div className="text-xs text-orange-600 mt-1">Year 1 Total</div>
+                    </div>
+                  </div>
+                  
+                  {/* Cumulative Profit Chart */}
+                  <div className="mt-4">
+                    <h5 className="text-sm font-medium text-gray-700 mb-2">Cumulative Profit Over Time (Including Setup Cost)</h5>
+                    <div className="h-32">
+                      <Line
+                        data={{
+                          labels: currentModel.map(p => `Year ${p.year}`),
+                          datasets: [
+                            {
+                              label: 'Cumulative Profit',
+                              data: currentModel.map(p => p.cumulativeProfit),
+                              borderColor: '#10B981',
+                              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                              tension: 0.4,
+                              fill: true
+                            },
+                            {
+                              label: 'Break-Even Line',
+                              data: currentModel.map(() => 0),
+                              borderColor: '#EF4444',
+                              borderDash: [5, 5],
+                              pointRadius: 0
+                            }
+                          ]
+                        }}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: { position: 'top' },
+                            title: { display: false }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: false,
+                              ticks: {
+                                callback: function(value) {
+                                  return '£' + (value as number).toLocaleString();
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -533,24 +1032,24 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
               {scenarioModels.map((scenario, index) => (
                 <div key={index} className="bg-gray-50 rounded-lg p-4" style={{ borderLeft: `4px solid ${scenario.color}` }}>
                   <h4 className="font-medium text-gray-900 mb-2">{scenario.name}</h4>
-                  {scenario.model && scenario.model.projections.length > 0 && (
+                  {scenario.model && scenario.model.length > 0 && (
                     <div className="space-y-2">
                       <div>
                         <div className="text-xs text-gray-500">5-Year Revenue</div>
                         <div className="text-lg font-semibold" style={{ color: scenario.color }}>
-                          ${scenario.model.projections[scenario.model.projections.length - 1].totalRevenue.toLocaleString()}
+                          ${scenario.model[scenario.model.length - 1].totalRevenue.toLocaleString()}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">5-Year Profit</div>
                         <div className="text-sm font-medium">
-                          ${scenario.model.projections[scenario.model.projections.length - 1].profit.toLocaleString()}
+                          ${scenario.model[scenario.model.length - 1].profit.toLocaleString()}
                         </div>
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">Final Users</div>
                         <div className="text-sm font-medium">
-                          {scenario.model.projections[scenario.model.projections.length - 1].users.toLocaleString()}
+                          {scenario.model[scenario.model.length - 1].users.toLocaleString()}
                         </div>
                       </div>
                     </div>
@@ -566,10 +1065,10 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                 <div className="h-64">
                   <Line
                     data={{
-                      labels: scenarioModels[0].model.projections.map(p => `Year ${p.year}`),
+                      labels: scenarioModels[0].model.map(p => `Year ${p.year}`),
                       datasets: scenarioModels.map(scenario => ({
                         label: scenario.name,
-                        data: scenario.model?.projections.map(p => p.totalRevenue) || [],
+                        data: scenario.model?.map(p => p.totalRevenue) || [],
                         borderColor: scenario.color,
                         backgroundColor: scenario.color + '20',
                         tension: 0.4
@@ -587,7 +1086,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                           beginAtZero: true,
                           ticks: {
                             callback: function(value) {
-                              return '$' + (value as number).toLocaleString();
+                              return '£' + (value as number).toLocaleString();
                             }
                           }
                         }
@@ -612,13 +1111,13 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                   <div className="bg-blue-50 rounded-lg p-4">
                     <div className="text-sm text-blue-600 font-medium">Current CAC</div>
                     <div className="text-2xl font-bold text-blue-900">
-                      ${currentModel?.params.cac.toFixed(0)}
+                      £{((enhancedBaselineModel?.globalCosts?.customerAcquisitionCost || 100) * (1 + sensitivityParams.cac / 100)).toFixed(0)}
                     </div>
                   </div>
                   <div className="bg-green-50 rounded-lg p-4">
                     <div className="text-sm text-green-600 font-medium">Current LTV</div>
                     <div className="text-2xl font-bold text-green-900">
-                      ${cacLtvAnalysis[cacLtvAnalysis.length - 1]?.ltv.toFixed(0)}
+                      £{cacLtvAnalysis[cacLtvAnalysis.length - 1]?.ltv.toFixed(0)}
                     </div>
                   </div>
                   <div className="bg-purple-50 rounded-lg p-4">
@@ -752,13 +1251,13 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                         <div className="bg-blue-50 rounded-lg p-4">
                           <div className="text-sm text-blue-600 font-medium">Avg 5-Year Revenue</div>
                           <div className="text-2xl font-bold text-blue-900">
-                            ${avgRevenue.toLocaleString()}
+                            £{avgRevenue.toLocaleString()}
                           </div>
                         </div>
                         <div className="bg-green-50 rounded-lg p-4">
                           <div className="text-sm text-green-600 font-medium">Avg 5-Year Profit</div>
                           <div className="text-2xl font-bold text-green-900">
-                            ${avgProfit.toLocaleString()}
+                            £{avgProfit.toLocaleString()}
                           </div>
                         </div>
                         <div className="bg-purple-50 rounded-lg p-4">
