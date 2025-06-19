@@ -397,15 +397,13 @@ export default function AdvancedBusinessModelingEngine({
           const hwGrowthFactor = Math.pow(1 + cappedHwGrowthRate / 100, monthsSinceStart);
           const annualHwUnits = (hwSaas.monthlyHardwareUnitsSold || 0) * hwGrowthFactor * 12;
           
-          // Hardware net revenue
+          // Hardware GROSS revenue (not net!)
           const hwGrossRevenue = annualHwUnits * (hwSaas.hardwareSalePrice || 0);
-          const hwCosts = annualHwUnits * (hwSaas.hardwareUnitCost || 0);
-          const hwNetRevenue = hwGrossRevenue - hwCosts;
           
           details.components.push({
-            type: 'Hardware Sales (Net)',
-            calculation: `${Math.round(annualHwUnits)} units × (£${hwSaas.hardwareSalePrice} - £${hwSaas.hardwareUnitCost})`,
-            value: hwNetRevenue
+            type: 'Hardware Sales (Gross)',
+            calculation: `${Math.round(annualHwUnits)} units × £${hwSaas.hardwareSalePrice}`,
+            value: hwGrossRevenue
           });
           
           // Estimate SaaS subscribers (simplified calculation for breakdown)
@@ -426,31 +424,14 @@ export default function AdvancedBusinessModelingEngine({
           const growthFactor = Math.pow(1 + (sales.growthRate || 0) / 100, monthsSinceStart);
           const annualUnits = (sales.unitsSoldPerMonth || 0) * growthFactor * 12;
           const grossRevenue = annualUnits * (sales.unitPrice || 0);
-          const cogs = annualUnits * (sales.cogs || 0);
-          const channelFees = grossRevenue * ((sales.channelFees || 0) / 100);
-          const netRevenue = grossRevenue - cogs - channelFees;
           
           details.components.push({
-            type: 'Gross Sales',
+            type: 'Gross Sales Revenue',
             calculation: `${Math.round(annualUnits)} units × £${sales.unitPrice}`,
             value: grossRevenue
           });
           
-          if (cogs > 0) {
-            details.components.push({
-              type: 'Cost of Goods Sold',
-              calculation: `${Math.round(annualUnits)} units × £${sales.cogs}`,
-              value: -cogs
-            });
-          }
-          
-          if (channelFees > 0) {
-            details.components.push({
-              type: 'Channel Fees',
-              calculation: `${sales.channelFees}% of gross revenue`,
-              value: -channelFees
-            });
-          }
+          // Note: COGS and channel fees are handled in the cost structure, not revenue breakdown
         }
         break;
 
