@@ -1432,7 +1432,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-lg font-bold text-blue-600">
-                              ${currentModel.params.cac.toFixed(0)}
+                              ${(100 * (1 + sensitivityParams.cac / 100)).toFixed(0)}
                             </div>
                             <div className="text-xs text-gray-500">Your Model</div>
                           </div>
@@ -1451,7 +1451,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-lg font-bold text-green-600">
-                              {currentModel.params.growthRate.toFixed(1)}%
+                              {sensitivityParams.growthRate.toFixed(1)}%
                             </div>
                             <div className="text-xs text-gray-500">Your Model</div>
                           </div>
@@ -1470,7 +1470,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-lg font-bold text-red-600">
-                              {currentModel.params.churnRate.toFixed(1)}%
+                              {sensitivityParams.churnRate.toFixed(1)}%
                             </div>
                             <div className="text-xs text-gray-500">Your Model</div>
                           </div>
@@ -1489,7 +1489,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-lg font-bold text-purple-600">
-                              ${currentModel.params.price.toFixed(0)}
+                              ${(50 * (1 + sensitivityParams.pricingMultiplier / 100)).toFixed(0)}
                             </div>
                             <div className="text-xs text-gray-500">Your Model</div>
                           </div>
