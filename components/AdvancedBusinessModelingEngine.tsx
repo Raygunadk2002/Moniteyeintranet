@@ -198,9 +198,11 @@ export interface ForecastResult {
   month: number;
   revenueByModel: Record<string, number>;
   totalRevenue: number;
-  totalCosts: number;
-  grossMargin: number;
-  netProfit: number;
+  totalCogs: number; // Cost of Goods Sold (direct costs)
+  totalOperatingExpenses: number; // Overheads/fixed costs
+  totalCosts: number; // Total of COGS + Operating Expenses
+  grossMargin: number; // Revenue - COGS
+  netProfit: number; // Gross Margin - Operating Expenses
   cumulativeCashFlow: number;
   customerBase: Record<string, number>;
   breakEvenReached: boolean;
@@ -532,7 +534,8 @@ export default function AdvancedBusinessModelingEngine({
           
           const revenueByModel: Record<string, number> = {};
           let totalRevenue = 0;
-          let totalCosts = modelConfig.globalCosts.monthlyFixedCosts;
+          let totalCogs = 0; // Cost of Goods Sold (direct costs)
+          let totalOperatingExpenses = modelConfig.globalCosts.monthlyFixedCosts; // Fixed costs/overheads
           const customerBase: Record<string, number> = {};
 
           // Process each model activation using REAL USER DATA
@@ -592,10 +595,9 @@ export default function AdvancedBusinessModelingEngine({
                     const hwGrowthFactor = Math.pow(1 + cappedHwGrowthRate / 100, monthsSinceStart);
                     const hwUnits = (hwSaas.monthlyHardwareUnitsSold || 0) * hwGrowthFactor * rampUpFactor;
                     
-                    // Hardware revenue (gross) and costs
+                    // Hardware revenue (GROSS - not net!)
                     const hwGrossRevenue = hwUnits * (hwSaas.hardwareSalePrice || 0);
-                    const hwCosts = hwUnits * (hwSaas.hardwareUnitCost || 0);
-                    const hwNetRevenue = hwGrossRevenue - hwCosts;
+                    const hwCogs = hwUnits * (hwSaas.hardwareUnitCost || 0);
                     
                     // SAAS revenue - proper cumulative calculation with churn
                     // Get previous month's SaaS user base (initialize if first month)
@@ -613,11 +615,14 @@ export default function AdvancedBusinessModelingEngine({
                     
                     const saasRevenue = currentSaasUsers * (hwSaas.monthlySaasPrice || 0);
                     
-                    // Total model revenue (hardware net + SaaS)
-                    modelRevenue = hwNetRevenue + saasRevenue;
+                    // Total model revenue (hardware GROSS + SaaS) - costs tracked separately
+                    modelRevenue = hwGrossRevenue + saasRevenue;
                     modelCustomers = hwUnits + currentSaasUsers;
                     
-                    console.log(`💰 Hardware+SAAS result: HW_NET(${hwUnits.toFixed(0)} × £${(hwSaas.hardwareSalePrice - hwSaas.hardwareUnitCost).toFixed(2)}) + SAAS(${currentSaasUsers.toFixed(0)} × £${hwSaas.monthlySaasPrice}) = £${modelRevenue.toFixed(2)}`);
+                    // Add hardware COGS to total COGS
+                    totalCogs += hwCogs;
+                    
+                    console.log(`💰 Hardware+SAAS result: HW_GROSS(${hwUnits.toFixed(0)} × £${hwSaas.hardwareSalePrice}) + SAAS(${currentSaasUsers.toFixed(0)} × £${hwSaas.monthlySaasPrice}) = £${modelRevenue.toFixed(2)} revenue, £${hwCogs.toFixed(2)} COGS`);
                     console.log(`📊 SaaS user tracking: Previous: ${previousSaasUsers.toFixed(0)}, New: ${newSaasConversions.toFixed(0)}, Churned: ${churnedUsers.toFixed(0)}, Current: ${currentSaasUsers.toFixed(0)}`);
                   }
                   break;
@@ -627,6 +632,7 @@ export default function AdvancedBusinessModelingEngine({
                   const sales = modelConfig.modelInputs.straightSales;
                   console.log(`📊 Straight Sales calculation for month ${monthIndex + 1} using REAL data:`, {
                     unitPrice: sales.unitPrice,
+                    cogs: sales.cogs,
                     unitsSoldPerMonth: sales.unitsSoldPerMonth,
                     growthRate: sales.growthRate,
                     channelFees: sales.channelFees,
@@ -647,12 +653,17 @@ export default function AdvancedBusinessModelingEngine({
                   
                   const units = baseUnits * seasonalFactor * rampUpFactor;
                   const grossRevenue = units * (sales.unitPrice || 0);
-                  const netRevenue = grossRevenue * (1 - (sales.channelFees || 0) / 100);
+                  const salesCogs = units * (sales.cogs || 0);
+                  const channelFees = grossRevenue * ((sales.channelFees || 0) / 100);
                   
-                  modelRevenue = netRevenue;
+                  // Revenue is gross (before channel fees), COGS includes unit costs + channel fees
+                  modelRevenue = grossRevenue;
                   modelCustomers = units;
                   
-                  console.log(`💰 Straight Sales result: ${units.toFixed(1)} units × £${sales.unitPrice} × ${(1 - (sales.channelFees || 0) / 100).toFixed(3)} = £${modelRevenue.toFixed(2)}`);
+                  // Add to total COGS
+                  totalCogs += salesCogs + channelFees;
+                  
+                  console.log(`💰 Straight Sales result: ${units.toFixed(1)} units × £${sales.unitPrice} = £${grossRevenue.toFixed(2)} revenue, £${(salesCogs + channelFees).toFixed(2)} COGS`);
                 }
                 break;
 
@@ -741,14 +752,14 @@ export default function AdvancedBusinessModelingEngine({
           }
         });
 
-        // Add costs using REAL cost structure
+        // Add operating expenses using REAL cost structure
         const currentYear = year - modelConfig.launchYear + 1;
         const teamCostForYear = modelConfig.globalCosts.teamCostsByYear.find(tc => tc.year === currentYear);
         const monthlyTeamCost = teamCostForYear ? teamCostForYear.totalCost / 12 : 0;
-        totalCosts += monthlyTeamCost;
-        totalCosts += modelConfig.globalCosts.hostingInfrastructure;
-        totalCosts += modelConfig.globalCosts.marketingBudget;
-        totalCosts += modelConfig.globalCosts.fulfillmentLogistics;
+        totalOperatingExpenses += monthlyTeamCost;
+        totalOperatingExpenses += modelConfig.globalCosts.hostingInfrastructure;
+        totalOperatingExpenses += modelConfig.globalCosts.marketingBudget;
+        totalOperatingExpenses += modelConfig.globalCosts.fulfillmentLogistics;
 
         // Add Property Play specific costs if Property Play model is active
         modelConfig.modelActivations.forEach(activation => {
@@ -805,7 +816,7 @@ export default function AdvancedBusinessModelingEngine({
             const totalPropertyCosts = monthlyMortgagePayment + monthlyPropertyTax + monthlyInsurance + 
                                      monthlyMaintenance + monthlyManagementFees + monthlyRenovationPayment;
             
-            totalCosts += totalPropertyCosts;
+            totalOperatingExpenses += totalPropertyCosts;
             
             console.log(`🏠 Property Play costs for month ${monthIndex + 1}:`, {
               downPaymentPercentage: propertyPlay.downPaymentPercentage + '%',
@@ -824,9 +835,10 @@ export default function AdvancedBusinessModelingEngine({
           }
         });
 
-        // Calculate metrics
-        const grossMargin = totalRevenue - (totalCosts - monthlyTeamCost); // Exclude team costs from gross margin
-        const netProfit = totalRevenue - totalCosts;
+        // Calculate proper accounting metrics
+        const totalCosts = totalCogs + totalOperatingExpenses; // Total costs = COGS + Operating Expenses
+        const grossMargin = totalRevenue - totalCogs; // Gross Margin = Revenue - COGS
+        const netProfit = grossMargin - totalOperatingExpenses; // Net Profit = Gross Margin - Operating Expenses
         
         // Update cumulative cash flow (includes initial setup cost impact)
         cumulativeCashFlow += netProfit;
@@ -837,6 +849,8 @@ export default function AdvancedBusinessModelingEngine({
           month,
           revenueByModel,
           totalRevenue,
+          totalCogs,
+          totalOperatingExpenses,
           totalCosts,
           grossMargin,
           netProfit,
