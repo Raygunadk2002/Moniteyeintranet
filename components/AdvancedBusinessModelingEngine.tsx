@@ -48,6 +48,7 @@ export interface HardwareSaasInputs {
   hardwareGrowthRate: number;
   hardwareToSaasConversion: number;
   monthlySaasPrice: number;
+  saasChurnRate: number; // Add churn rate for SaaS subscribers
   hardwareMargin: number;
   supportCosts: number;
 }
@@ -188,6 +189,7 @@ export interface BusinessModelConfig {
     discountRate: number;
     forecastYears: number;
   };
+  saasUserHistory?: number[]; // Track SaaS user count month by month for churn calculations
 }
 
 // Financial forecast results
@@ -393,6 +395,9 @@ export default function AdvancedBusinessModelingEngine({
       const startYear = modelConfig.launchYear;
       const endYear = startYear + modelConfig.assumptions.forecastYears;
       
+      // Reset SaaS user history for fresh calculations
+      modelConfig.saasUserHistory = [];
+      
       // Track cumulative cash flow for break-even analysis
       let cumulativeCashFlow = -modelConfig.globalCosts.initialSetupCost; // Start with negative initial setup cost
 
@@ -450,26 +455,45 @@ export default function AdvancedBusinessModelingEngine({
                     const hwSaas = modelConfig.modelInputs.hardwareSaas;
                     console.log(`📊 Hardware+SAAS calculation for month ${monthIndex + 1} using REAL data:`, {
                       hardwareSalePrice: hwSaas.hardwareSalePrice,
+                      hardwareUnitCost: hwSaas.hardwareUnitCost,
                       monthlyHardwareUnitsSold: hwSaas.monthlyHardwareUnitsSold,
                       monthlySaasPrice: hwSaas.monthlySaasPrice,
-                      hardwareToSaasConversion: hwSaas.hardwareToSaasConversion
+                      hardwareToSaasConversion: hwSaas.hardwareToSaasConversion,
+                      saasChurnRate: hwSaas.saasChurnRate
                     });
                     
                     // Cap hardware growth rate at 15% monthly to prevent exponential explosion
                     const cappedHwGrowthRate = Math.min(hwSaas.hardwareGrowthRate || 0, 15);
                     const hwGrowthFactor = Math.pow(1 + cappedHwGrowthRate / 100, monthsSinceStart);
                     const hwUnits = (hwSaas.monthlyHardwareUnitsSold || 0) * hwGrowthFactor * rampUpFactor;
-                    const hwRevenue = hwUnits * (hwSaas.hardwareSalePrice || 0);
                     
-                    // SAAS revenue from hardware conversions (accumulates over time)
-                    const saasConversions = hwUnits * ((hwSaas.hardwareToSaasConversion || 0) / 100);
-                    const cumulativeSaasUsers = saasConversions * monthsSinceStart; // Accumulate over time
-                    const saasRevenue = cumulativeSaasUsers * (hwSaas.monthlySaasPrice || 0);
+                    // Hardware revenue (gross) and costs
+                    const hwGrossRevenue = hwUnits * (hwSaas.hardwareSalePrice || 0);
+                    const hwCosts = hwUnits * (hwSaas.hardwareUnitCost || 0);
+                    const hwNetRevenue = hwGrossRevenue - hwCosts;
                     
-                    modelRevenue = hwRevenue + saasRevenue;
-                    modelCustomers = hwUnits + cumulativeSaasUsers;
+                    // SAAS revenue - proper cumulative calculation with churn
+                    // Get previous month's SaaS user base (initialize if first month)
+                    if (!modelConfig.saasUserHistory) {
+                      modelConfig.saasUserHistory = [];
+                    }
                     
-                    console.log(`💰 Hardware+SAAS result: HW(${hwUnits.toFixed(0)} × £${hwSaas.hardwareSalePrice}) + SAAS(${cumulativeSaasUsers.toFixed(0)} × £${hwSaas.monthlySaasPrice}) = £${modelRevenue.toFixed(2)}`);
+                    const previousSaasUsers = modelConfig.saasUserHistory[monthIndex - 1] || 0;
+                    const newSaasConversions = hwUnits * ((hwSaas.hardwareToSaasConversion || 0) / 100);
+                    const churnedUsers = previousSaasUsers * ((hwSaas.saasChurnRate || 0) / 100);
+                    const currentSaasUsers = Math.max(0, previousSaasUsers + newSaasConversions - churnedUsers);
+                    
+                    // Store current user count for next month
+                    modelConfig.saasUserHistory[monthIndex] = currentSaasUsers;
+                    
+                    const saasRevenue = currentSaasUsers * (hwSaas.monthlySaasPrice || 0);
+                    
+                    // Total model revenue (hardware net + SaaS)
+                    modelRevenue = hwNetRevenue + saasRevenue;
+                    modelCustomers = hwUnits + currentSaasUsers;
+                    
+                    console.log(`💰 Hardware+SAAS result: HW_NET(${hwUnits.toFixed(0)} × £${(hwSaas.hardwareSalePrice - hwSaas.hardwareUnitCost).toFixed(2)}) + SAAS(${currentSaasUsers.toFixed(0)} × £${hwSaas.monthlySaasPrice}) = £${modelRevenue.toFixed(2)}`);
+                    console.log(`📊 SaaS user tracking: Previous: ${previousSaasUsers.toFixed(0)}, New: ${newSaasConversions.toFixed(0)}, Churned: ${churnedUsers.toFixed(0)}, Current: ${currentSaasUsers.toFixed(0)}`);
                   }
                   break;
 
@@ -928,6 +952,7 @@ export default function AdvancedBusinessModelingEngine({
           hardwareGrowthRate: 15,             // Growth rate based on your market
           hardwareToSaasConversion: 80,       // Conversion rate for your customers
           monthlySaasPrice: 99,               // Your SAAS component pricing
+          saasChurnRate: 5,                  // Add churn rate for SaaS subscribers
           hardwareMargin: 58,                 // Calculated from your prices (1200-500)/1200
           supportCosts: 200
         };
@@ -1166,6 +1191,7 @@ export default function AdvancedBusinessModelingEngine({
             hardwareGrowthRate: 5,
             hardwareToSaasConversion: 60,
             monthlySaasPrice: 19.99,
+            saasChurnRate: 5,
             hardwareMargin: 75,
             supportCosts: 10
           };
@@ -1810,8 +1836,9 @@ export default function AdvancedBusinessModelingEngine({
                                   hardwareGrowthRate: prev.modelInputs.hardwareSaas?.hardwareGrowthRate || 0,
                                   hardwareToSaasConversion: prev.modelInputs.hardwareSaas?.hardwareToSaasConversion || 0,
                                   monthlySaasPrice: prev.modelInputs.hardwareSaas?.monthlySaasPrice || 0,
-                                  hardwareMargin: prev.modelInputs.hardwareSaas?.hardwareMargin || 0,
-                                  supportCosts: prev.modelInputs.hardwareSaas?.supportCosts || 0
+                                                                      saasChurnRate: prev.modelInputs.hardwareSaas?.saasChurnRate || 5,
+                                    hardwareMargin: prev.modelInputs.hardwareSaas?.hardwareMargin || 0,
+                                    supportCosts: prev.modelInputs.hardwareSaas?.supportCosts || 0
                                 }
                               }
                             }));
@@ -1945,6 +1972,36 @@ export default function AdvancedBusinessModelingEngine({
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="e.g., 29.99"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          SaaS Monthly Churn Rate (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={modelConfig.modelInputs.hardwareSaas?.saasChurnRate || ''}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value) || 0;
+                            setModelConfig(prev => ({
+                              ...prev,
+                              modelInputs: {
+                                ...prev.modelInputs,
+                                hardwareSaas: {
+                                  ...prev.modelInputs.hardwareSaas!,
+                                  saasChurnRate: value
+                                }
+                              }
+                            }));
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., 5.0"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Percentage of SaaS subscribers who cancel each month
+                        </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
