@@ -1507,28 +1507,28 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="text-center">
                         <div className={`text-2xl font-bold ${
-                          currentModel.params.cac < (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.cac || Infinity) 
+                          (100 * (1 + sensitivityParams.cac / 100)) < (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.cac || Infinity) 
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {currentModel.params.cac < (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.cac || Infinity) ? '✅' : '⚠️'}
+                          {(100 * (1 + sensitivityParams.cac / 100)) < (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.cac || Infinity) ? '✅' : '⚠️'}
                         </div>
                         <div className="text-sm text-gray-600">CAC vs Industry</div>
                       </div>
                       <div className="text-center">
                         <div className={`text-2xl font-bold ${
-                          currentModel.params.growthRate > (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.monthlyGrowthRate || 0) 
+                          sensitivityParams.growthRate > (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.monthlyGrowthRate || 0) 
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {currentModel.params.growthRate > (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.monthlyGrowthRate || 0) ? '✅' : '⚠️'}
+                          {sensitivityParams.growthRate > (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.monthlyGrowthRate || 0) ? '✅' : '⚠️'}
                         </div>
                         <div className="text-sm text-gray-600">Growth vs Industry</div>
                       </div>
                       <div className="text-center">
                         <div className={`text-2xl font-bold ${
-                          currentModel.params.churnRate < (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.monthlyChurnRate || 0) 
+                          sensitivityParams.churnRate < (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.monthlyChurnRate || 0) 
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {currentModel.params.churnRate < (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.monthlyChurnRate || 0) ? '✅' : '⚠️'}
+                          {sensitivityParams.churnRate < (marketBenchmarks.find(b => b.businessModel === 'SAAS')?.metrics.monthlyChurnRate || 0) ? '✅' : '⚠️'}
                         </div>
                         <div className="text-sm text-gray-600">Churn vs Industry</div>
                       </div>
