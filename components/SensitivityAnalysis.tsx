@@ -233,7 +233,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
         totalMonths: forecastResults.length,
         initialSetupCost,
         teamCostsByYearLength: teamCostsByYear.length,
-        firstFewResults: forecastResults.slice(0, 3).map(r => ({
+        firstFewResults: forecastResults.slice(0, 3).map((r: any) => ({
           year: r.year,
           month: r.month,
           totalRevenue: r.totalRevenue,
