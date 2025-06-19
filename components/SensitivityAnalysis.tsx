@@ -271,7 +271,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
       // Convert to annual projections
       Array.from(yearlyData.values()).sort((a, b) => a.year - b.year).forEach((yearData: any, index: number) => {
         // Get staffing costs for this year
-        const teamCostForYear = teamCostsByYear.find(tc => tc.year === (index + 1)) || 
+        const teamCostForYear = teamCostsByYear.find((tc: any) => tc.year === (index + 1)) || 
                                teamCostsByYear[Math.min(index, teamCostsByYear.length - 1)] ||
                                { totalCost: 120000 + (index * 60000) }; // Default with growth
         
@@ -279,7 +279,7 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
         const operatingCosts = Math.max(0, yearData.totalCosts - (staffingCosts / 12) * yearData.monthCount);
         
         // Use actual cumulative cash flow from forecast results if available
-        const lastMonthOfYear = forecastResults.filter(r => r.year === yearData.year).slice(-1)[0];
+        const lastMonthOfYear = forecastResults.filter((r: any) => r.year === yearData.year).slice(-1)[0];
         const actualCumulativeCashFlow = lastMonthOfYear?.cumulativeCashFlow;
         
         // Calculate cumulative revenue and costs for this specific year
@@ -360,12 +360,12 @@ const SensitivityAnalysis: React.FC<SensitivityAnalysisProps> = ({ baselineModel
       const baseUsers = (saasInputs.monthlyNewUserAcquisition || 0) * 12 * year;
       const adjustedUsers = baseUsers * (1 + params.growthRate / 100);
       const avgPrice = saasInputs.monthlyPriceTiers?.length > 0 
-        ? saasInputs.monthlyPriceTiers.reduce((sum, tier) => sum + tier.price, 0) / saasInputs.monthlyPriceTiers.length
+        ? saasInputs.monthlyPriceTiers.reduce((sum: number, tier: any) => sum + tier.price, 0) / saasInputs.monthlyPriceTiers.length
         : 50;
       
       const annualRevenue = adjustedUsers * avgPrice * 12 * (1 + params.pricingMultiplier / 100);
       // Use actual team costs from the baseline model instead of fallback values
-      const actualTeamCost = globalCosts.teamCostsByYear?.find(tc => tc.year === year)?.totalCost;
+      const actualTeamCost = globalCosts.teamCostsByYear?.find((tc: any) => tc.year === year)?.totalCost;
       const teamCost = actualTeamCost !== undefined ? actualTeamCost : 120000;
       const operatingCosts = (globalCosts.monthlyFixedCosts || 0) * 12;
       const totalCosts = (teamCost + operatingCosts) * (1 + params.upfrontCosts / 100);
