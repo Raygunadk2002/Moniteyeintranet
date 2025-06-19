@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { BusinessIdea } from '../pages/business-ideas';
 import BusinessModelCharts from './BusinessModelCharts';
 import SensitivityAnalysis from './SensitivityAnalysis';
+import BusinessModelKPIs from './BusinessModelKPIs';
 
 // Enhanced business model types
 export type BusinessModelType = 
@@ -3967,6 +3968,13 @@ export default function AdvancedBusinessModelingEngine({
 
         {!isLoading && activeTab === 'analysis' && (
           <div className="space-y-6">
+            {/* Business Model KPIs Component */}
+            <BusinessModelKPIs 
+              forecastResults={forecastResults}
+              modelConfig={modelConfig}
+              activatedModels={selectedModels}
+            />
+
             {/* Sensitivity Analysis Component */}
             <SensitivityAnalysis 
               baselineModel={{
