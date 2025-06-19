@@ -302,6 +302,16 @@ export default function AdvancedBusinessModelingEngine({
     propUserIdType: typeof propUserId,
     propUserIdLength: propUserId?.length
   });
+  
+  // State for revenue breakdown modal
+  const [revenueBreakdownModal, setRevenueBreakdownModal] = useState<{
+    isOpen: boolean;
+    model: string;
+    year: number;
+    revenue: number;
+    details: any;
+  } | null>(null);
+  
   const [activeTab, setActiveTab] = useState<'setup' | 'models' | 'costs' | 'forecast' | 'analysis'>('setup');
   const [modelConfig, setModelConfig] = useState<BusinessModelConfig>({
     id: idea.id,
@@ -337,6 +347,121 @@ export default function AdvancedBusinessModelingEngine({
   const [forecastResults, setForecastResults] = useState<ForecastResult[]>([]);
   const [selectedModels, setSelectedModels] = useState<BusinessModelType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Function to calculate detailed revenue breakdown for a specific model and year
+  const calculateRevenueBreakdown = (model: string, year: number) => {
+    const modelInputs = modelConfig.modelInputs;
+    const activation = modelConfig.modelActivations.find(a => a.modelType === model);
+    if (!activation) return null;
+
+    const monthsSinceStart = Math.max(0, (year - activation.startYear) * 12);
+    const details: any = { components: [] };
+
+    switch (model) {
+      case 'SAAS':
+        if (modelInputs.saas) {
+          const saas = modelInputs.saas;
+          const currentGrowthRate = getGrowthRateForYear(saas.growthRatesByYear || [], year, activation.startYear);
+          const cappedGrowthRate = Math.min(currentGrowthRate, 20);
+          const growthFactor = Math.pow(1 + cappedGrowthRate / 100, monthsSinceStart);
+          const baseUsers = (saas.monthlyNewUserAcquisition || 0) * monthsSinceStart * growthFactor;
+          const churnAdjustedUsers = Math.max(0, baseUsers * Math.pow(1 - (saas.userChurnRate || 0) / 100, monthsSinceStart));
+          const avgPrice = saas.monthlyPriceTiers.length > 0 
+            ? saas.monthlyPriceTiers.reduce((sum, tier) => sum + (tier.price || 0), 0) / saas.monthlyPriceTiers.length
+            : 0;
+          
+          details.components.push({
+            type: 'SaaS Subscriptions',
+            calculation: `${Math.round(churnAdjustedUsers)} users × £${avgPrice.toFixed(2)}/month × 12 months`,
+            value: churnAdjustedUsers * avgPrice * 12
+          });
+          
+          if (saas.upsellExpansionRevenue > 0) {
+            const expansionRevenue = churnAdjustedUsers * avgPrice * 12 * (saas.upsellExpansionRevenue / 100);
+            details.components.push({
+              type: 'Upsell/Expansion Revenue',
+              calculation: `${saas.upsellExpansionRevenue}% of base revenue`,
+              value: expansionRevenue
+            });
+          }
+        }
+        break;
+
+      case 'Hardware + SAAS':
+        if (modelInputs.hardwareSaas) {
+          const hwSaas = modelInputs.hardwareSaas;
+          const cappedHwGrowthRate = Math.min(hwSaas.hardwareGrowthRate || 0, 15);
+          const hwGrowthFactor = Math.pow(1 + cappedHwGrowthRate / 100, monthsSinceStart);
+          const annualHwUnits = (hwSaas.monthlyHardwareUnitsSold || 0) * hwGrowthFactor * 12;
+          
+          // Hardware net revenue
+          const hwGrossRevenue = annualHwUnits * (hwSaas.hardwareSalePrice || 0);
+          const hwCosts = annualHwUnits * (hwSaas.hardwareUnitCost || 0);
+          const hwNetRevenue = hwGrossRevenue - hwCosts;
+          
+          details.components.push({
+            type: 'Hardware Sales (Net)',
+            calculation: `${Math.round(annualHwUnits)} units × (£${hwSaas.hardwareSalePrice} - £${hwSaas.hardwareUnitCost})`,
+            value: hwNetRevenue
+          });
+          
+          // Estimate SaaS subscribers (simplified calculation for breakdown)
+          const estimatedSaasUsers = annualHwUnits * (hwSaas.hardwareToSaasConversion / 100);
+          const saasRevenue = estimatedSaasUsers * (hwSaas.monthlySaasPrice || 0) * 12;
+          
+          details.components.push({
+            type: 'SaaS Subscriptions',
+            calculation: `${Math.round(estimatedSaasUsers)} subscribers × £${hwSaas.monthlySaasPrice}/month × 12 months`,
+            value: saasRevenue
+          });
+        }
+        break;
+
+      case 'Straight Sales':
+        if (modelInputs.straightSales) {
+          const sales = modelInputs.straightSales;
+          const growthFactor = Math.pow(1 + (sales.growthRate || 0) / 100, monthsSinceStart);
+          const annualUnits = (sales.unitsSoldPerMonth || 0) * growthFactor * 12;
+          const grossRevenue = annualUnits * (sales.unitPrice || 0);
+          const cogs = annualUnits * (sales.cogs || 0);
+          const channelFees = grossRevenue * ((sales.channelFees || 0) / 100);
+          const netRevenue = grossRevenue - cogs - channelFees;
+          
+          details.components.push({
+            type: 'Gross Sales',
+            calculation: `${Math.round(annualUnits)} units × £${sales.unitPrice}`,
+            value: grossRevenue
+          });
+          
+          if (cogs > 0) {
+            details.components.push({
+              type: 'Cost of Goods Sold',
+              calculation: `${Math.round(annualUnits)} units × £${sales.cogs}`,
+              value: -cogs
+            });
+          }
+          
+          if (channelFees > 0) {
+            details.components.push({
+              type: 'Channel Fees',
+              calculation: `${sales.channelFees}% of gross revenue`,
+              value: -channelFees
+            });
+          }
+        }
+        break;
+
+      // Add more model types as needed
+      default:
+        details.components.push({
+          type: model,
+          calculation: 'Detailed breakdown not available for this model type',
+          value: 0
+        });
+    }
+
+    return details;
+  };
 
   // Available business models
   const availableModels: { type: BusinessModelType; description: string; icon: string }[] = [
@@ -3473,7 +3598,21 @@ export default function AdvancedBusinessModelingEngine({
                             .filter(r => r.year === year)
                             .reduce((sum, r) => sum + (r.revenueByModel[model] || 0), 0);
                           return (
-                            <td key={year} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td 
+                              key={year} 
+                              className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 cursor-pointer hover:text-blue-800 hover:bg-blue-50 transition-colors"
+                              onClick={() => {
+                                const details = calculateRevenueBreakdown(model, year);
+                                setRevenueBreakdownModal({
+                                  isOpen: true,
+                                  model,
+                                  year,
+                                  revenue: yearRevenue,
+                                  details
+                                });
+                              }}
+                              title="Click to see detailed breakdown"
+                            >
                               £{yearRevenue.toLocaleString()}
                             </td>
                           );
@@ -3945,6 +4084,71 @@ export default function AdvancedBusinessModelingEngine({
           </div>
         )}
       </div>
+
+      {/* Revenue Breakdown Modal */}
+      {revenueBreakdownModal?.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Revenue Breakdown: {revenueBreakdownModal.model} - Year {revenueBreakdownModal.year - modelConfig.launchYear + 1}
+                </h3>
+                <button
+                  onClick={() => setRevenueBreakdownModal(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">
+                Total Annual Revenue: <span className="font-medium text-green-600">£{revenueBreakdownModal.revenue.toLocaleString()}</span>
+              </p>
+            </div>
+            
+            <div className="px-6 py-4">
+              {revenueBreakdownModal.details?.components && revenueBreakdownModal.details.components.length > 0 ? (
+                <div className="space-y-4">
+                  <h4 className="font-medium text-gray-900">How this revenue is calculated:</h4>
+                  
+                  {revenueBreakdownModal.details.components.map((component: any, index: number) => (
+                    <div key={index} className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <h5 className="font-medium text-gray-800">{component.type}</h5>
+                        <span className={`font-medium ${component.value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {component.value >= 0 ? '+' : ''}£{Math.abs(component.value).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">{component.calculation}</p>
+                    </div>
+                  ))}
+                  
+                  <div className="border-t border-gray-200 pt-4">
+                    <div className="flex justify-between items-center font-medium">
+                      <span>Total Revenue:</span>
+                      <span className="text-green-600">£{revenueBreakdownModal.revenue.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Detailed breakdown not available for this model type.</p>
+                  <p className="text-sm mt-2">Revenue calculation methods vary by business model.</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setRevenueBreakdownModal(null)}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
