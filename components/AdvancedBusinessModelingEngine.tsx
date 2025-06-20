@@ -364,23 +364,46 @@ export default function AdvancedBusinessModelingEngine({
       case 'SAAS':
         if (modelInputs.saas) {
           const saas = modelInputs.saas;
-          const currentGrowthRate = getGrowthRateForYear(saas.growthRatesByYear || [], year, activation.startYear);
-          const cappedGrowthRate = Math.min(currentGrowthRate, 20);
-          const growthFactor = Math.pow(1 + cappedGrowthRate / 100, monthsSinceStart);
-          const baseUsers = (saas.monthlyNewUserAcquisition || 0) * monthsSinceStart * growthFactor;
-          const churnAdjustedUsers = Math.max(0, baseUsers * Math.pow(1 - (saas.userChurnRate || 0) / 100, monthsSinceStart));
+          
+          // Calculate average users across the year (not just end of year)
+          let totalAnnualUsers = 0;
+          let totalAnnualRevenue = 0;
+          
+          for (let month = 1; month <= 12; month++) {
+            const monthsSinceStart = Math.max(0, (year - activation.startYear) * 12 + month - 1);
+            const rampUpFactor = Math.min(1, monthsSinceStart / activation.rampUpMonths);
+            
+            const currentGrowthRate = getGrowthRateForYear(saas.growthRatesByYear || [], year, activation.startYear);
+            const cappedGrowthRate = Math.min(currentGrowthRate, 20);
+            const growthFactor = Math.pow(1 + cappedGrowthRate / 100, monthsSinceStart);
+            const baseUsers = (saas.monthlyNewUserAcquisition || 0) * monthsSinceStart * growthFactor;
+            const churnAdjustedUsers = Math.max(0, baseUsers * Math.pow(1 - (saas.userChurnRate || 0) / 100, monthsSinceStart));
+            const actualUsers = churnAdjustedUsers * rampUpFactor;
+            
+            const avgPrice = saas.monthlyPriceTiers.length > 0 
+              ? saas.monthlyPriceTiers.reduce((sum, tier) => sum + (tier.price || 0), 0) / saas.monthlyPriceTiers.length
+              : 0;
+            
+            const monthlyRevenue = actualUsers * avgPrice * (1 + (saas.upsellExpansionRevenue || 0) / 100);
+            totalAnnualUsers += actualUsers;
+            totalAnnualRevenue += monthlyRevenue;
+          }
+          
+          const avgAnnualUsers = totalAnnualUsers / 12;
           const avgPrice = saas.monthlyPriceTiers.length > 0 
             ? saas.monthlyPriceTiers.reduce((sum, tier) => sum + (tier.price || 0), 0) / saas.monthlyPriceTiers.length
             : 0;
           
+          const baseAnnualRevenue = avgAnnualUsers * avgPrice * 12;
+          
           details.components.push({
             type: 'SaaS Subscriptions',
-            calculation: `${Math.round(churnAdjustedUsers)} users × £${avgPrice.toFixed(2)}/month × 12 months`,
-            value: churnAdjustedUsers * avgPrice * 12
+            calculation: `${Math.round(avgAnnualUsers)} users × £${avgPrice.toFixed(2)}/month × 12 months`,
+            value: baseAnnualRevenue
           });
           
           if (saas.upsellExpansionRevenue > 0) {
-            const expansionRevenue = churnAdjustedUsers * avgPrice * 12 * (saas.upsellExpansionRevenue / 100);
+            const expansionRevenue = baseAnnualRevenue * (saas.upsellExpansionRevenue / 100);
             details.components.push({
               type: 'Upsell/Expansion Revenue',
               calculation: `${saas.upsellExpansionRevenue}% of base revenue`,
