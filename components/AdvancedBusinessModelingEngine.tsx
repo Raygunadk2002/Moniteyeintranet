@@ -21,6 +21,7 @@ export type BusinessModelType =
 export interface ModelActivation {
   modelType: BusinessModelType;
   startYear: number;
+  startMonth: number; // 1-12 for January-December
   endYear?: number;
   rampUpMonths: number;
 }
@@ -370,8 +371,14 @@ export default function AdvancedBusinessModelingEngine({
           let totalAnnualRevenue = 0;
           
           for (let month = 1; month <= 12; month++) {
-            const monthsSinceStart = Math.max(0, (year - activation.startYear) * 12 + month - 1);
-            const rampUpFactor = Math.min(1, monthsSinceStart / activation.rampUpMonths);
+            // Check if the model should be active for this month
+            const activationStarted = (year > activation.startYear) || 
+                                    (year === activation.startYear && month >= activation.startMonth);
+            
+            if (!activationStarted) continue; // Skip this month if model hasn't started yet
+            
+            const monthsSinceStart = Math.max(0, (year - activation.startYear) * 12 + month - activation.startMonth);
+            const rampUpFactor = activation.rampUpMonths > 0 ? Math.min(1, monthsSinceStart / activation.rampUpMonths) : 1;
             
             const currentGrowthRate = getGrowthRateForYear(saas.growthRatesByYear || [], year, activation.startYear);
             const cappedGrowthRate = Math.min(currentGrowthRate, 20);
@@ -545,9 +552,13 @@ export default function AdvancedBusinessModelingEngine({
 
           // Process each model activation using REAL USER DATA
           modelConfig.modelActivations.forEach(activation => {
-            if (year >= activation.startYear && (!activation.endYear || year <= activation.endYear)) {
-              const monthsSinceStart = Math.max(0, (year - activation.startYear) * 12 + month - 1);
-              const rampUpFactor = Math.min(1, monthsSinceStart / activation.rampUpMonths);
+            // Check if the model should be active based on start year and month
+            const activationStarted = (year > activation.startYear) || 
+                                    (year === activation.startYear && month >= activation.startMonth);
+            
+            if (activationStarted && (!activation.endYear || year <= activation.endYear)) {
+              const monthsSinceStart = Math.max(0, (year - activation.startYear) * 12 + month - activation.startMonth);
+              const rampUpFactor = activation.rampUpMonths > 0 ? Math.min(1, monthsSinceStart / activation.rampUpMonths) : 1;
               
               let modelRevenue = 0;
               let modelCustomers = 0;
@@ -977,8 +988,11 @@ export default function AdvancedBusinessModelingEngine({
               name: existingModel.name || idea.name,
               description: existingModel.description || idea.description,
               sector: existingModel.sector || idea.industry,
-              launchYear: existingModel.launch_year || new Date().getFullYear(),
-              modelActivations: existingModel.model_activations || [],
+              launchYear: existingModel.launch_year || 2025,
+                              modelActivations: (existingModel.model_activations || []).map((activation: any) => ({
+                  ...activation,
+                  startMonth: activation.startMonth || 1 // Default to January if not set
+                })),
               modelInputs: modelInputs,
               globalCosts: globalCosts,
               assumptions: existingModel.assumptions || {
@@ -1216,11 +1230,12 @@ export default function AdvancedBusinessModelingEngine({
         name: idea.name,                      // YOUR ACTUAL BUSINESS NAME
         description: idea.description || `${idea.name} business model`,
         sector: idea.industry || 'Technology',  // YOUR ACTUAL INDUSTRY
-        launchYear: new Date().getFullYear(),
+        launchYear: 2025,
         modelActivations: [{
           modelType: initialModelType,
-          startYear: new Date().getFullYear(),
-          rampUpMonths: 3
+          startYear: 2025,
+          startMonth: 1,
+          rampUpMonths: 0
         }],
         modelInputs: initialModelInputs,
         globalCosts: {
@@ -1451,7 +1466,8 @@ export default function AdvancedBusinessModelingEngine({
           modelActivations: [...prev.modelActivations, {
             modelType,
             startYear: prev.launchYear,
-            rampUpMonths: 12
+            startMonth: 1,
+            rampUpMonths: 0
           }]
         };
       });
@@ -1640,7 +1656,7 @@ export default function AdvancedBusinessModelingEngine({
                     </div>
                     {selectedModels.includes(model.type) && (
                       <div className="mt-3 pt-3 border-t border-blue-200">
-                        <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="grid grid-cols-3 gap-2 text-sm">
                           <div>
                             <label className="block text-gray-600">Start Year</label>
                             <input
@@ -1660,12 +1676,43 @@ export default function AdvancedBusinessModelingEngine({
                             />
                           </div>
                           <div>
+                            <label className="block text-gray-600">Start Month</label>
+                            <select
+                              value={modelConfig.modelActivations.find(a => a.modelType === model.type)?.startMonth || 1}
+                              onChange={(e) => {
+                                const startMonth = parseInt(e.target.value);
+                                setModelConfig(prev => ({
+                                  ...prev,
+                                  modelActivations: prev.modelActivations.map(a => 
+                                    a.modelType === model.type ? { ...a, startMonth } : a
+                                  )
+                                }));
+                              }}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <option value={1}>January</option>
+                              <option value={2}>February</option>
+                              <option value={3}>March</option>
+                              <option value={4}>April</option>
+                              <option value={5}>May</option>
+                              <option value={6}>June</option>
+                              <option value={7}>July</option>
+                              <option value={8}>August</option>
+                              <option value={9}>September</option>
+                              <option value={10}>October</option>
+                              <option value={11}>November</option>
+                              <option value={12}>December</option>
+                            </select>
+                          </div>
+                          <div>
                             <label className="block text-gray-600">Ramp-up (months)</label>
                             <input
                               type="number"
-                              value={modelConfig.modelActivations.find(a => a.modelType === model.type)?.rampUpMonths || 12}
+                              min="0"
+                              value={modelConfig.modelActivations.find(a => a.modelType === model.type)?.rampUpMonths || 0}
                               onChange={(e) => {
-                                const rampUpMonths = parseInt(e.target.value);
+                                const rampUpMonths = Math.max(0, parseInt(e.target.value) || 0);
                                 setModelConfig(prev => ({
                                   ...prev,
                                   modelActivations: prev.modelActivations.map(a => 
